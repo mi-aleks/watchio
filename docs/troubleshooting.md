@@ -1,5 +1,16 @@
 # Troubleshooting
 
+## `make install` fails
+
+Confirm `uname -m` prints `arm64`, `sw_vers -productVersion` is macOS 14 or newer, and
+`xcodebuild -version` reports Xcode 16.2 or newer. The installer never needs `sudo`; a permission
+error usually means `WATCHIO_INSTALL_DIR` points outside a user-writable directory. Its default is
+`~/Applications`.
+
+If Watchio cannot be replaced, quit the existing app from its menu and run `make install` again.
+Build diagnostics remain under `.build/Install`. Do not remove quarantine attributes, disable
+Gatekeeper, or bypass a failed code-signature verification.
+
 ## The app runs but no menu appears
 
 Watchio is a menu bar accessory (`LSUIElement`). Look for `w:` in the menu bar. If macOS hides menu extras because of limited space, close another menu bar item temporarily.
