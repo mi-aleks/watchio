@@ -1,6 +1,6 @@
 # Watchio Privacy Promise
 
-Watchio observes local development services without creating a behavioral history or sending data elsewhere.
+Watchio observes and can explicitly stop local development process trees without creating a behavioral history or sending data elsewhere.
 
 ## Data Watchio uses
 
@@ -31,7 +31,16 @@ are stored in shared local defaults.
 
 ## Network and privileges
 
-Watchio contains no application networking client and makes no Watchio-originated outbound requests. It does not ask for root, Full Disk Access, Accessibility, or Automation permission. The visible collector is nonsandboxed solely to inspect same-user process metadata; the widget is sandboxed.
+Watchio contains no application networking client and makes no Watchio-originated outbound requests. It does not ask for root, Full Disk Access, Accessibility, or Automation permission. The visible collector is nonsandboxed to inspect same-user process metadata and perform an explicitly confirmed same-user process-tree stop; the widget is sandboxed.
+
+## Process control
+
+Watchio never sends a process signal during scanning, from a widget, or in the background. A stop
+begins only after the user expands a local row, chooses **Stop tree…**, and accepts a destructive
+confirmation. The app verifies PID, current UID, executable identity, and inferred start time;
+freezes and stabilizes the descendant tree; requests graceful termination; and force-kills only
+verified survivors after five seconds. It refuses Watchio and its ancestors and never broadcasts to
+a process group. The transient identity records used for this operation are not persisted.
 
 ## Verify the promise
 

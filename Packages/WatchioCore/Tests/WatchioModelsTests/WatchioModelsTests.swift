@@ -13,6 +13,10 @@ final class WatchioModelsTests: XCTestCase {
     XCTAssertEqual(decoded.schemaVersion, WatchioSnapshot.currentSchemaVersion)
     XCTAssertEqual(decoded.services.count, 4)
     XCTAssertEqual(decoded.aiActivities.count, 4)
+    XCTAssertTrue(
+      decoded.services.filter { $0.representativePID != nil }
+        .allSatisfy { $0.representativeStartedAt != nil })
+    XCTAssertTrue(decoded.aiActivities.allSatisfy { $0.representativeStartedAt <= .now })
     XCTAssertTrue(decoded.isCompatible)
   }
 

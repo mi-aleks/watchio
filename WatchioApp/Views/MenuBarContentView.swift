@@ -36,6 +36,17 @@ struct MenuBarContentView: View {
     .background { WatchioSurface().ignoresSafeArea() }
     .environment(\.colorScheme, .dark)
     .onOpenURL { model.handleDeepLink($0) }
+    .alert(
+      "Process control",
+      isPresented: Binding(
+        get: { model.processControlNotice != nil },
+        set: { if !$0 { model.processControlNotice = nil } }
+      )
+    ) {
+      Button("OK") { model.processControlNotice = nil }
+    } message: {
+      Text(model.processControlNotice ?? "")
+    }
   }
 
   private var onboarding: some View {
@@ -44,7 +55,7 @@ struct MenuBarContentView: View {
         .font(.headline)
         .foregroundStyle(.white)
       Text(
-        "Scanning stays on this Mac. Watchio never reads environment values or changes a process."
+        "Scanning stays on this Mac. Process control runs only after an explicit confirmation."
       )
       .font(.caption)
       .foregroundStyle(WatchioPalette.secondaryText)
@@ -343,20 +354,27 @@ private struct AIResourceMetric: View {
 }
 
 private struct AIActivityDetail: View {
+  @Environment(AppModel.self) private var model
   let activity: DetectedAIActivity
+  @State private var isConfirmingStop = false
 
   var body: some View {
-    Grid(alignment: .leading, horizontalSpacing: 14, verticalSpacing: 6) {
-      detail("PID", String(activity.representativePID))
-      detail("Processes", String(activity.processCount))
-      detail("CPU (process tree)", WatchioFormat.cpu(activity.cpuPercent))
-      detail("RAM (RSS process tree)", WatchioFormat.bytes(activity.memoryBytes))
-      detail("Host", activity.host.displayName)
-      detail("Confidence", "\(activity.confidence)%")
-      GridRow {
-        Text("Evidence").foregroundStyle(.secondary)
-        Text(activity.evidence.map(\.displayName).joined(separator: " · ")).lineLimit(3)
+    VStack(alignment: .leading, spacing: 10) {
+      Grid(alignment: .leading, horizontalSpacing: 14, verticalSpacing: 6) {
+        detail("PID", String(activity.representativePID))
+        detail("Processes", String(activity.processCount))
+        detail("CPU (process tree)", WatchioFormat.cpu(activity.cpuPercent))
+        detail("RAM (RSS process tree)", WatchioFormat.bytes(activity.memoryBytes))
+        detail("Host", activity.host.displayName)
+        detail("Confidence", "\(activity.confidence)%")
+        GridRow {
+          Text("Evidence").foregroundStyle(.secondary)
+          Text(activity.evidence.map(\.displayName).joined(separator: " · ")).lineLimit(3)
+        }
       }
+      processControl(
+        processID: activity.representativePID, processCount: activity.processCount,
+        displayName: activity.tool.displayName)
     }
     .font(.caption)
     .foregroundStyle(.white.opacity(0.82))
@@ -364,6 +382,14 @@ private struct AIActivityDetail: View {
     .background(Color.black.opacity(0.14), in: RoundedRectangle(cornerRadius: 11))
     .padding(.horizontal, 4)
     .padding(.bottom, 4)
+    .alert("Stop \(activity.tool.displayName) process tree?", isPresented: $isConfirmingStop) {
+      Button("Cancel", role: .cancel) {}
+      Button("Stop now", role: .destructive) {
+        Task { await model.stopProcessTree(for: activity) }
+      }
+    } message: {
+      Text(stopConfirmationMessage(processCount: activity.processCount))
+    }
   }
 
   private func detail(_ label: String, _ value: String) -> some View {
@@ -371,6 +397,32 @@ private struct AIActivityDetail: View {
       Text(label).foregroundStyle(.secondary)
       Text(value).textSelection(.enabled)
     }
+  }
+
+  private func processControl(
+    processID: Int32, processCount: Int, displayName: String
+  ) -> some View {
+    HStack(spacing: 8) {
+      Image(systemName: "shield.lefthalf.filled")
+        .foregroundStyle(.orange)
+      Text("Verified tree · TERM, then KILL survivors")
+        .font(.caption2)
+        .foregroundStyle(.secondary)
+      Spacer()
+      Button(role: .destructive) {
+        isConfirmingStop = true
+      } label: {
+        if model.isStopping(processID: processID) {
+          ProgressView().controlSize(.small)
+        } else {
+          Label("Stop tree…", systemImage: "power")
+        }
+      }
+      .disabled(model.stoppingProcessID != nil)
+      .accessibilityLabel("Stop the selected \(displayName) process tree")
+      .accessibilityIdentifier("stop-ai-\(activity.id)")
+    }
+    .padding(.top, 2)
   }
 }
 
@@ -443,18 +495,42 @@ private struct ServiceRow: View {
 }
 
 private struct ServiceDetail: View {
+  @Environment(AppModel.self) private var model
   let service: DetectedService
+  @State private var isConfirmingStop = false
 
   var body: some View {
-    Grid(alignment: .leading, horizontalSpacing: 14, verticalSpacing: 6) {
-      detail("PID", service.representativePID.map(String.init) ?? "Container")
-      detail("Processes", String(service.processCount))
-      detail("CPU", service.cpuPercent.map { String(format: "%.1f%%", $0) } ?? "—")
-      detail("Memory", WatchioFormat.bytes(service.memoryBytes))
-      detail("Confidence", "\(service.confidence)%")
-      GridRow {
-        Text("Evidence").foregroundStyle(.secondary)
-        Text(service.evidence.map(\.displayName).joined(separator: " · ")).lineLimit(3)
+    VStack(alignment: .leading, spacing: 10) {
+      Grid(alignment: .leading, horizontalSpacing: 14, verticalSpacing: 6) {
+        detail("PID", service.representativePID.map(String.init) ?? "Container")
+        detail("Processes", String(service.processCount))
+        detail("CPU", service.cpuPercent.map { String(format: "%.1f%%", $0) } ?? "—")
+        detail("Memory", WatchioFormat.bytes(service.memoryBytes))
+        detail("Confidence", "\(service.confidence)%")
+        GridRow {
+          Text("Evidence").foregroundStyle(.secondary)
+          Text(service.evidence.map(\.displayName).joined(separator: " · ")).lineLimit(3)
+        }
+      }
+      if let processID = service.representativePID, service.representativeStartedAt != nil {
+        HStack(spacing: 8) {
+          Image(systemName: "shield.lefthalf.filled").foregroundStyle(.orange)
+          Text("Verified tree · TERM, then KILL survivors")
+            .font(.caption2).foregroundStyle(.secondary)
+          Spacer()
+          Button(role: .destructive) {
+            isConfirmingStop = true
+          } label: {
+            if model.isStopping(processID: processID) {
+              ProgressView().controlSize(.small)
+            } else {
+              Label("Stop tree…", systemImage: "power")
+            }
+          }
+          .disabled(model.stoppingProcessID != nil)
+          .accessibilityLabel("Stop the selected \(service.name) process tree")
+          .accessibilityIdentifier("stop-service-\(service.id)")
+        }
       }
     }
     .font(.caption)
@@ -463,6 +539,14 @@ private struct ServiceDetail: View {
     .background(Color.black.opacity(0.14), in: RoundedRectangle(cornerRadius: 11))
     .padding(.horizontal, 4)
     .padding(.bottom, 4)
+    .alert("Stop \(service.name) process tree?", isPresented: $isConfirmingStop) {
+      Button("Cancel", role: .cancel) {}
+      Button("Stop now", role: .destructive) {
+        Task { await model.stopProcessTree(for: service) }
+      }
+    } message: {
+      Text(stopConfirmationMessage(processCount: service.processCount))
+    }
   }
 
   private func detail(_ label: String, _ value: String) -> some View {
@@ -471,4 +555,8 @@ private struct ServiceDetail: View {
       Text(value).textSelection(.enabled)
     }
   }
+}
+
+private func stopConfirmationMessage(processCount: Int) -> String {
+  "This row currently groups \(processCount) processes. Watchio will resolve the selected PID tree again, freeze and re-verify its same-user members, send SIGTERM deepest-first, wait up to 5 seconds, then SIGKILL only verified survivors. This cannot be undone."
 }

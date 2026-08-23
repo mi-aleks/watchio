@@ -6,10 +6,10 @@ Watchio is a native menu bar collector and a sandboxed WidgetKit reader separate
 
 | Component | Responsibility | Security posture |
 |---|---|---|
-| `WatchioApp` | Owns the scan loop, menu bar UI, Settings, login-item opt-in, in-memory trend | Visible, same-user, nonsandboxed, no root |
+| `WatchioApp` | Owns the scan loop, menu bar UI, confirmed process control, Settings, login-item opt-in, in-memory trend | Visible, same-user, nonsandboxed, no root |
 | `WatchioWidget` | Reads and renders the latest snapshot | App Sandbox enabled, read-only product behavior |
 | `WatchioModels` | Codable snapshot and transient inventory value types | No side effects |
-| `WatchioDetection` | Process/listener/container inventory, project resolution, scoring, grouping | Fixed executables and arguments, bounded output |
+| `WatchioDetection` | Process/listener/container inventory, project resolution, scoring, grouping, safe tree termination | Fixed inventory commands; explicit verified POSIX signals |
 | `WatchioStorage` | Atomic latest-snapshot and shared preferences | Unknown schema versions fail closed |
 
 There are no runtime dependencies and no generated project. `Watchio.xcodeproj` links a local Swift package so the core can be tested without launching an app.
@@ -22,6 +22,11 @@ There are no runtime dependencies and no generated project. `Watchio.xcodeproj` 
 4. The app renders the result and atomically replaces the latest redacted snapshot.
 5. WidgetKit loads that snapshot, applies its view/scope configuration, and renders a freshness or fail-closed state.
 
+A process-control request is a separate, user-confirmed path. `ProcessTreeTerminator` re-inventories
+the selected root, freezes and stabilizes its same-user descendants, re-verifies every identity,
+then uses graceful termination with a bounded force-kill fallback. It does not reuse detection
+grouping as authority and does not signal a process group.
+
 The app asks WidgetKit to reload for service/port/collector changes, coarse resource buckets, or a throttled 30-second freshness heartbeat. The heartbeat prevents an unchanged live collector from looking offline while still avoiding per-scan reload pressure.
 
 ## Protocol boundaries
@@ -30,13 +35,14 @@ The app asks WidgetKit to reload for service/port/collector changes, coarse reso
 - `ListenerInventoryProviding`
 - `ContainerInventoryProviding`
 - `ProjectResolving`
+- `ProcessSignaling`
 - `SnapshotStoring`
 
 Tests inject deterministic providers. The production runner never invokes a shell and cannot interpolate inventory values into executable source text.
 
 ## Storage contract
 
-`WatchioSnapshot` schema version 2 contains generated time, collector state, services, AI activities,
+`WatchioSnapshot` schema version 3 contains generated time, collector state, services, AI activities,
 review suggestions, and source health. A service contains only display-safe project path,
 normalized listeners, aggregate resources, representative PID, process count, start time,
 confidence, and non-sensitive evidence. An AI activity contains the recognized tool and host plus
@@ -47,7 +53,7 @@ Raw arguments, environment values, full home paths, executable paths, CWDs, and 
 
 ## Sandboxing and signing
 
-The collector is nonsandboxed because sandboxed apps cannot reliably inspect arbitrary same-user development processes. It has no privilege helper, root path, LaunchAgent, automation permission, or Full Disk Access request. The widget is sandboxed. Release builds enable Hardened Runtime.
+The collector is nonsandboxed because sandboxed apps cannot reliably inspect or explicitly signal arbitrary same-user development processes. It has no privilege helper, root path, LaunchAgent, automation permission, or Full Disk Access request. The widget is sandboxed. Release builds enable Hardened Runtime.
 
 Both targets share `$(DEVELOPMENT_TEAM).io.github.mi-aleks.watchio.shared`, a team-prefixed group suitable for source builders selecting their own team.
 
@@ -58,5 +64,7 @@ Both targets share `$(DEVELOPMENT_TEAM).io.github.mi-aleks.watchio.shared`, a te
 - Conservative scoring creates occasional Review items but reduces surprising GUI/system false positives.
 - Snapshot-only widgets can be stale because WidgetKit owns scheduling; the app is the authoritative live view.
 - Docker collection fails closed when the active CLI context is not a local Unix socket.
+- POSIX process IDs do not provide a macOS equivalent of Linux `pidfd`; Watchio minimizes that race with repeated identity checks and never sends `SIGTERM` or `SIGKILL` after a mismatch.
+- A supervisor outside the selected tree may launch a replacement after a stop; Watchio will not climb into unrelated ancestors to prevent it.
 
-See [ADR-0001](adr/0001-native-observe-only.md) and [Detection](detection.md).
+See [ADR-0001](adr/0001-native-observe-only.md), [ADR-0002](adr/0002-safe-process-tree-control.md), and [Detection](detection.md).

@@ -99,4 +99,4 @@ Candidates group by resolved project root plus process group (or PID when no use
 
 ## Adding a detector
 
-Add a narrow runtime rule, positive fixtures, GUI/daemon false-positive fixtures, and grouping tests. Explain what public metadata creates confidence. A new detector may not require environment values, argument persistence, file-content crawling, outbound requests, elevated privileges, or an action that changes a process.
+Add a narrow runtime rule, positive fixtures, GUI/daemon false-positive fixtures, and grouping tests. Explain what public metadata creates confidence. A new detector may not require environment values, argument persistence, file-content crawling, outbound requests, or elevated privileges. Detection must never trigger process control; the separately confirmed stop contract is documented in [ADR-0002](adr/0002-safe-process-tree-control.md).

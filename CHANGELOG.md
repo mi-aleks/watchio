@@ -11,6 +11,9 @@ All notable changes follow [Keep a Changelog](https://keepachangelog.com/en/1.1.
 - Added host classification for CLI, VS Code, desktop, background, and separately executable
   subagent processes, with descendant resource aggregation and explainable confidence evidence.
 - Added always-visible CPU and resident RAM totals to AI rows and Medium/Large AI widgets.
+- Added an explicitly confirmed Stop tree action for local services and AI activities, with same-user
+  identity checks, descendant stabilization, graceful termination, verified force-kill fallback,
+  survivor reporting, and deterministic PID-reuse safety tests.
 
 ### Changed
 

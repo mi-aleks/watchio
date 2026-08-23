@@ -240,7 +240,8 @@ struct SettingsView: View {
       Label("Fully local", systemImage: "checkmark.shield.fill").font(.title2).foregroundStyle(
         .green)
       promise("No telemetry, accounts, analytics, or network requests")
-      promise("No root access, privilege prompts, or process-changing actions")
+      promise("No root access, privilege prompts, or automatic process actions")
+      promise("Stop tree requires confirmation and re-verifies same-user process identity")
       promise("No environment variables or command arguments collected")
       promise("AI activity never reads prompts, conversation files, or session history")
       promise("Only the latest redacted snapshot is stored; no history")
@@ -259,7 +260,7 @@ struct SettingsView: View {
       Text("w:").font(.system(size: 58, weight: .black, design: .monospaced)).foregroundStyle(.tint)
       Text("Watchio").font(.title.bold())
       Text("0.1.0-alpha.1").foregroundStyle(.secondary)
-      Text("An open-source development service observer for macOS.")
+      Text("An open-source development process companion for macOS.")
       HStack {
         Link("GitHub", destination: URL(string: "https://github.com/mi-aleks/watchio")!)
         Link(
