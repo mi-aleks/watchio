@@ -168,6 +168,8 @@ final class ClassifierAndEngineTests: XCTestCase {
 
     XCTAssertEqual(result.aiActivities.map(\.tool), [.claude, .codex])
     XCTAssertEqual(result.aiActivities.map(\.processCount), [2, 2])
+    XCTAssertEqual(result.aiActivities.map(\.cpuPercent), [3, 3])
+    XCTAssertEqual(result.aiActivities.map(\.memoryBytes), [20_000, 20_000])
     XCTAssertEqual(result.aiActivities.first?.projectName, "watchio")
     XCTAssertEqual(result.aiActivities.last?.host, .visualStudioCode)
   }

@@ -86,7 +86,9 @@ Scores of 60 or more appear automatically. Scores from 40–59 go to **Settings 
 The AI view reuses the same `ps` inventory and recognizes exact executable identities for Codex,
 Claude, Gemini CLI, Aider, OpenCode, Goose, GitHub Copilot CLI, and Cursor Agent. It labels where
 an activity is hosted—CLI, VS Code, desktop, background, or a child agent—and groups ordinary
-descendant processes under the nearest recognized AI process.
+descendant processes under the nearest recognized AI process. Every AI row shows the current CPU
+percentage and resident RAM for that complete logical process tree; the expanded detail exposes
+the representative PID and included process count.
 
 AI detection has a separate, conservative score:
 

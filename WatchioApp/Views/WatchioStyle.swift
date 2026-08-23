@@ -24,6 +24,10 @@ enum WatchioFormat {
     return ByteCountFormatter.string(fromByteCount: Int64(bytes), countStyle: .memory)
   }
 
+  static func cpu(_ value: Double) -> String {
+    String(format: "%.1f%%", value)
+  }
+
   static func uptime(_ activity: DetectedAIActivity, now: Date = .now) -> String {
     duration(activity.uptime(referenceDate: now))
   }

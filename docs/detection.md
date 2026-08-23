@@ -85,7 +85,8 @@ non-sensitive evidence used by the score.
 
 The classifier labels an activity as CLI, VS Code, desktop, background, or subagent. Descendant
 helper processes contribute CPU, RSS, process count, and uptime to their nearest recognized AI
-ancestor. A separately executable AI child can remain its own subagent row.
+ancestor. The UI labels CPU and resident RAM as process-tree totals. A separately executable AI
+child can remain its own subagent row with independent totals.
 
 Watchio cannot safely infer a tool when macOS exposes only a generic `node` or `python` executable,
 because arguments are outside the collection contract. It also cannot enumerate logical agents,

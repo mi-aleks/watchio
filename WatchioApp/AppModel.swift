@@ -224,8 +224,9 @@ final class AppModel {
     let memoryBucket =
       snapshot.services.compactMap(\.memoryBytes).reduce(0, +) / (64 * 1_024 * 1_024)
     let aiCPU = Int(snapshot.aiActivities.map(\.cpuPercent).reduce(0, +) / 5)
+    let aiMemory = snapshot.aiActivities.map(\.memoryBytes).reduce(0, +) / (64 * 1_024 * 1_024)
     return
-      "\(snapshot.collectorState.rawValue)|\(services)|ai:\(aiActivities)|cpu:\(cpuBucket)|mem:\(memoryBucket)|aicpu:\(aiCPU)"
+      "\(snapshot.collectorState.rawValue)|\(services)|ai:\(aiActivities)|cpu:\(cpuBucket)|mem:\(memoryBucket)|aicpu:\(aiCPU)|aimem:\(aiMemory)"
   }
 
   private func normalizedRule(_ rawRule: String) -> String? {
