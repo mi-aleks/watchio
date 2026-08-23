@@ -38,12 +38,13 @@ final class WatchioUITests: XCTestCase {
     XCTAssertTrue(stopTree.waitForExistence(timeout: 3))
     stopTree.click()
 
-    let alert = app.alerts["Stop Codex process tree?"]
-    XCTAssertTrue(alert.waitForExistence(timeout: 3))
-    XCTAssertTrue(alert.buttons["Stop now"].exists)
-    XCTAssertTrue(alert.buttons["Cancel"].exists)
-    alert.buttons["Cancel"].click()
-    XCTAssertTrue(alert.waitForNonExistence(timeout: 2))
+    let stopNow = app.buttons["Stop now"]
+    let cancel = app.buttons["Cancel"]
+    XCTAssertTrue(stopNow.waitForExistence(timeout: 3))
+    XCTAssertTrue(cancel.exists)
+    XCTAssertTrue(app.staticTexts["Stop Codex process tree?"].exists)
+    cancel.click()
+    XCTAssertTrue(stopNow.waitForNonExistence(timeout: 2))
   }
 
   func testOnboardingDefaultActionCompletesIntroduction() {

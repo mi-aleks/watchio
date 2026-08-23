@@ -16,7 +16,7 @@ test:
 	swift test --package-path Packages/WatchioCore
 
 ui-test:
-	xcodebuild -quiet -project Watchio.xcodeproj -scheme Watchio -destination '$(DESTINATION)' -derivedDataPath '$(DERIVED_DATA)' CODE_SIGN_IDENTITY=- test
+	xcodebuild -project Watchio.xcodeproj -scheme Watchio -destination '$(DESTINATION)' -derivedDataPath '$(DERIVED_DATA)' CODE_SIGN_IDENTITY=- test
 
 build:
 	$(XCODEBUILD) -configuration Debug build
