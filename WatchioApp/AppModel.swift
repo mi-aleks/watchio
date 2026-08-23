@@ -11,6 +11,7 @@ import WidgetKit
 final class AppModel {
   enum Mode: String, CaseIterable, Identifiable {
     case services = "Services"
+    case ai = "AI"
     case ports = "Ports"
     case health = "Health"
     var id: Self { self }
@@ -21,6 +22,7 @@ final class AppModel {
   var preferences: DetectionPreferences
   var selectedMode: Mode = .services
   var selectedServiceID: String?
+  var selectedAIActivityID: String?
   var lastError: String?
   var isScanning = false
   private(set) var hasCompletedOnboarding: Bool
@@ -57,9 +59,12 @@ final class AppModel {
     }
   }
 
-  var menuBarTitle: String { "w:\(snapshot.services.count)" }
+  var menuBarTitle: String { "w:\(snapshot.services.count + snapshot.aiActivities.count)" }
   var selectedService: DetectedService? {
     snapshot.services.first { $0.id == selectedServiceID }
+  }
+  var selectedAIActivity: DetectedAIActivity? {
+    snapshot.aiActivities.first { $0.id == selectedAIActivityID }
   }
 
   var launchAtLogin: Bool {
@@ -103,12 +108,16 @@ final class AppModel {
     let next = WatchioSnapshot(
       collectorState: degraded ? .degraded : .active,
       services: result.services,
+      aiActivities: result.aiActivities,
       reviewSuggestions: result.reviewSuggestions,
       sourceHealth: result.sourceHealth
     )
     snapshot = next
     selectedServiceID = selectedServiceID.flatMap { id in
       next.services.contains { $0.id == id } ? id : nil
+    }
+    selectedAIActivityID = selectedAIActivityID.flatMap { id in
+      next.aiActivities.contains { $0.id == id } ? id : nil
     }
     trend.append(
       ResourceSample(
@@ -192,6 +201,9 @@ final class AppModel {
   func handleDeepLink(_ url: URL) {
     guard url.scheme?.lowercased() == "watchio" else { return }
     switch url.host?.lowercased() {
+    case "ai":
+      selectedMode = .ai
+      selectedAIActivityID = url.pathComponents.dropFirst().first
     case "ports": selectedMode = .ports
     case "health": selectedMode = .health
     case "service":
@@ -205,10 +217,15 @@ final class AppModel {
     let services = snapshot.services.map { service in
       "\(service.id):\(service.ports.map(\.id).joined(separator: ","))"
     }.joined(separator: "|")
+    let aiActivities = snapshot.aiActivities.map { activity in
+      "\(activity.id):\(activity.processCount)"
+    }.joined(separator: "|")
     let cpuBucket = Int(snapshot.services.compactMap(\.cpuPercent).reduce(0, +) / 5)
     let memoryBucket =
       snapshot.services.compactMap(\.memoryBytes).reduce(0, +) / (64 * 1_024 * 1_024)
-    return "\(snapshot.collectorState.rawValue)|\(services)|cpu:\(cpuBucket)|mem:\(memoryBucket)"
+    let aiCPU = Int(snapshot.aiActivities.map(\.cpuPercent).reduce(0, +) / 5)
+    return
+      "\(snapshot.collectorState.rawValue)|\(services)|ai:\(aiActivities)|cpu:\(cpuBucket)|mem:\(memoryBucket)|aicpu:\(aiCPU)"
   }
 
   private func normalizedRule(_ rawRule: String) -> String? {

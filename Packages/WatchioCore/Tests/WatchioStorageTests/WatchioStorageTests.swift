@@ -19,6 +19,9 @@ final class WatchioStorageTests: XCTestCase {
     XCTAssertEqual(snapshot.services.map(\.id), DemoData.snapshot.services.map(\.id))
     XCTAssertEqual(snapshot.services.map(\.name), DemoData.snapshot.services.map(\.name))
     XCTAssertEqual(snapshot.services.map(\.ports), DemoData.snapshot.services.map(\.ports))
+    XCTAssertEqual(snapshot.aiActivities.map(\.id), DemoData.snapshot.aiActivities.map(\.id))
+    XCTAssertEqual(snapshot.aiActivities.map(\.tool), DemoData.snapshot.aiActivities.map(\.tool))
+    XCTAssertEqual(snapshot.aiActivities.map(\.host), DemoData.snapshot.aiActivities.map(\.host))
     XCTAssertEqual(snapshot.collectorState, .active)
     XCTAssertEqual(
       try FileManager.default.contentsOfDirectory(atPath: directory.path),
@@ -36,6 +39,27 @@ final class WatchioStorageTests: XCTestCase {
     )
     let loaded = await JSONSnapshotStore(directory: directory).load()
     XCTAssertEqual(loaded, .updateRequired(foundVersion: 999))
+  }
+
+  func testLegacySnapshotFilenameFailsClosedAndIsRemovedAfterSave() async throws {
+    let directory = FileManager.default.temporaryDirectory
+      .appendingPathComponent("watchio-legacy-\(UUID().uuidString)", isDirectory: true)
+    defer { try? FileManager.default.removeItem(at: directory) }
+    try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+    let legacyURL = directory.appendingPathComponent(
+      try XCTUnwrap(WatchioSharedContainer.legacySnapshotFilenames.first))
+    try Data(#"{"schemaVersion":1}"#.utf8).write(to: legacyURL)
+    let store = JSONSnapshotStore(directory: directory)
+
+    let legacyResult = await store.load()
+    XCTAssertEqual(legacyResult, .updateRequired(foundVersion: 1))
+
+    try await store.save(DemoData.snapshot)
+    XCTAssertFalse(FileManager.default.fileExists(atPath: legacyURL.path))
+    let currentResult = await store.load()
+    guard case .snapshot = currentResult else {
+      return XCTFail("Expected the current snapshot after migration")
+    }
   }
 
   func testCorruptSnapshotDoesNotLeakPartialData() async throws {
@@ -81,5 +105,6 @@ final class WatchioStorageTests: XCTestCase {
     XCTAssertEqual(preferences.includeRules, [])
     XCTAssertEqual(preferences.ignoreRules, [])
     XCTAssertTrue(preferences.showProjectPaths)
+    XCTAssertTrue(preferences.observeAIActivity)
   }
 }

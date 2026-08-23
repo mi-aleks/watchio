@@ -15,7 +15,9 @@ struct WatchioApp: App {
         systemImage: model.snapshot.collectorState == .degraded
           ? "exclamationmark.circle" : "terminal"
       )
-      .accessibilityLabel("Watchio, \(model.snapshot.services.count) active services")
+      .accessibilityLabel(
+        "Watchio, \(model.snapshot.services.count) active services and \(model.snapshot.aiActivities.count) AI activities"
+      )
     }
     .menuBarExtraStyle(.window)
 

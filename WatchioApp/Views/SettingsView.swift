@@ -105,6 +105,28 @@ struct SettingsView: View {
           .padding(8)
         }
 
+        GroupBox("AI activity") {
+          VStack(alignment: .leading, spacing: 6) {
+            Toggle(
+              "Detect supported local AI tools",
+              isOn: Binding(
+                get: { model.preferences.observeAIActivity },
+                set: {
+                  model.preferences.observeAIActivity = $0
+                  model.savePreferences()
+                }
+              )
+            )
+            .accessibilityIdentifier("detect-ai-activity")
+            Text(
+              "Uses executable identity, CWD, TTY, and process ancestry. Prompts, command arguments, environment values, and conversation files are never read."
+            )
+            .font(.caption)
+            .foregroundStyle(.secondary)
+          }
+          .padding(8)
+        }
+
         GroupBox("Rules") {
           VStack(alignment: .leading, spacing: 12) {
             Text(
@@ -202,7 +224,7 @@ struct SettingsView: View {
   private var widget: some View {
     Form {
       LabeledContent("Families", value: "Small, Medium, Large")
-      LabeledContent("Configuration", value: "Services / Ports / Health, all or one project")
+      LabeledContent("Configuration", value: "Services / AI / Ports / Health")
       LabeledContent("Freshness") { Text("Offline after 30 seconds").foregroundStyle(.secondary) }
       Text(
         "macOS controls widget refresh timing. Watchio requests refreshes for material changes and a throttled freshness heartbeat."
@@ -220,6 +242,7 @@ struct SettingsView: View {
       promise("No telemetry, accounts, analytics, or network requests")
       promise("No root access, privilege prompts, or process-changing actions")
       promise("No environment variables or command arguments collected")
+      promise("AI activity never reads prompts, conversation files, or session history")
       promise("Only the latest redacted snapshot is stored; no history")
       promise("Project paths inside your home directory are shortened to ~")
       Spacer()

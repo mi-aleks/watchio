@@ -4,7 +4,7 @@
 
 <h1 align="center">Watchio</h1>
 
-<p align="center">A private, native macOS view of the development services already running on your machine.</p>
+<p align="center">A private, native macOS view of the development services and AI tools already running on your machine.</p>
 
 <p align="center">
   <a href="https://github.com/mi-aleks/watchio/actions/workflows/ci.yml"><img alt="CI status" src="https://github.com/mi-aleks/watchio/actions/workflows/ci.yml/badge.svg"></a>
@@ -15,7 +15,7 @@
 
 ![Watchio native menu bar app showing four deterministic demo development services](docs/assets/watchio-hero.png)
 
-Watchio answers the small but persistent question: **what did I leave running?** It detects supported development runtimes, their project, process tree, resource use, and listening ports—then makes the result glanceable from the menu bar and Widget Center.
+Watchio answers the small but persistent question: **what did I leave running?** It detects supported development runtimes and local AI tools, their project, process tree, resource use, and listening ports—then makes the result glanceable from the menu bar and Widget Center.
 
 Watchio `0.1.0-alpha.1` is source-only. It is not signed, notarized, distributed as a DMG, or available through Homebrew yet.
 
@@ -24,6 +24,7 @@ Watchio `0.1.0-alpha.1` is source-only. It is not signed, notarized, distributed
 - Native SwiftUI menu bar app and Small, Medium, and Large widgets
 - Original runtime glyphs make Node.js, Go, Python, Bun, Deno, containers, and common Compose
   databases recognizable at a glance
+- A dedicated AI activity view recognizes supported CLI, IDE, desktop, and child-agent processes
 - Automatic, explainable detection instead of a manually maintained service list
 - First-class Node.js, Bun, Deno, Go, Python, and Docker Compose support
 - Observe-only: Watchio cannot stop, restart, or otherwise change a process
@@ -78,11 +79,36 @@ The confidence model is intentionally simple and documented:
 
 Scores of 60 or more appear automatically. Scores from 40–59 go to **Settings → Review**. Lower scores stay hidden. GUI executables, system daemons, Watchio itself, Docker's backend, and unexplained launchd children receive strong penalties. See [Detection](docs/detection.md) for the complete contract.
 
+## Local AI activity
+
+![Watchio AI activity view showing deterministic Codex, Claude, and Gemini demo processes](docs/assets/watchio-ai.png)
+
+The AI view reuses the same `ps` inventory and recognizes exact executable identities for Codex,
+Claude, Gemini CLI, Aider, OpenCode, Goose, GitHub Copilot CLI, and Cursor Agent. It labels where
+an activity is hosted—CLI, VS Code, desktop, background, or a child agent—and groups ordinary
+descendant processes under the nearest recognized AI process.
+
+AI detection has a separate, conservative score:
+
+| Evidence | Score |
+|---|---:|
+| Exact supported executable | +45 |
+| Recognized installation path | +20 |
+| Working directory resolves to a project | +15 |
+| Terminal, IDE, or desktop host | +15 |
+| Recognized AI-process ancestry | +10 |
+
+Activities need a score of 60 to appear. Detection is process-only: Watchio never reads prompts,
+conversation files, session history, task titles, raw arguments, or environment variables. A
+desktop app that multiplexes several logical agents inside one OS process appears as one activity;
+separate agent processes can appear independently. Script-based tools that expose only a generic
+`node` or `python` executable cannot be identified safely and remain hidden.
+
 ## Widgets are snapshots, not monitors
 
 WidgetKit controls refresh timing. Watchio writes one versioned snapshot atomically and asks WidgetKit to reload for material service/resource changes or a throttled freshness heartbeat. A widget shows freshness and moves to an offline state when its snapshot becomes stale. Keep the menu bar app running for collection; Watchio does not install a hidden LaunchAgent.
 
-Widget configuration supports Services, Ports, or Health, across all projects or a named project. Widget taps deep-link to `watchio://`.
+Widget configuration supports Services, AI Activity, Ports, or Health, across all projects or a named project. Widget taps deep-link to `watchio://`.
 
 ## Privacy and security
 
@@ -91,6 +117,7 @@ Watchio is designed so useful output does not require sensitive input:
 - Process inventory is restricted to the current Unix UID.
 - Environment variables are never read into inventory, snapshots, or diagnostics.
 - Raw command arguments are never stored and never enter snapshots.
+- AI prompts, conversation files, session history, and task titles are never read.
 - Home paths are shortened to `~`; external paths are reduced to a display name.
 - Only the latest snapshot is retained. Resource trends remain bounded in memory.
 - There are no application network APIs, accounts, analytics, or update checks.
@@ -109,7 +136,9 @@ flowchart LR
   E --> L["/usr/sbin/lsof"]
   E --> D["Active Docker CLI context"]
   E --> R["Project resolver"]
-  E --> S["Confidence + grouping"]
+  E --> S["Service confidence + grouping"]
+  E --> I["AI identity + ancestry"]
+  I --> M
   S --> M["Menu bar and Settings"]
   S --> J["Atomic versioned snapshot"]
   J --> W["Sandboxed WidgetKit extension"]
@@ -137,6 +166,8 @@ Set `WATCHIO_RUN_INTEGRATION_TESTS=1` when running `swift test` to enable the re
 - macOS may delay WidgetKit refreshes. The menu bar view is the freshest source.
 - `lsof` and Docker can be unavailable or degraded; Watchio reports source health instead of failing the whole scan.
 - Service names are inferred without storing command arguments, so two identical runtimes in one process group may be grouped together.
+- AI activity is process-level, not conversation-level; internal desktop sessions are intentionally opaque.
+- AI tools implemented as generic `node` or `python` processes may be hidden rather than guessed from arguments.
 - The alpha is source-only and uses your local development team. There is no automatic updater.
 
 ## Roadmap

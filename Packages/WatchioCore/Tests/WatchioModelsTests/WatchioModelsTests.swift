@@ -12,6 +12,7 @@ final class WatchioModelsTests: XCTestCase {
     let decoded = try decoder.decode(WatchioSnapshot.self, from: encoder.encode(DemoData.snapshot))
     XCTAssertEqual(decoded.schemaVersion, WatchioSnapshot.currentSchemaVersion)
     XCTAssertEqual(decoded.services.count, 4)
+    XCTAssertEqual(decoded.aiActivities.count, 4)
     XCTAssertTrue(decoded.isCompatible)
   }
 
@@ -21,6 +22,7 @@ final class WatchioModelsTests: XCTestCase {
     XCTAssertFalse(text.lowercased().contains("environment"))
     XCTAssertFalse(text.lowercased().contains("commandline"))
     XCTAssertFalse(text.lowercased().contains("arguments"))
+    XCTAssertFalse(text.lowercased().contains("prompt"))
   }
 
   func testStableIdentifiersAreRepeatableAndOrderSensitive() {

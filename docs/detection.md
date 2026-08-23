@@ -16,6 +16,8 @@ All commands have fixed executable URLs, argument arrays, timeouts, cancellation
 
 Only records matching `getuid()` and at least three seconds old proceed. Watchio does not request arguments from `ps` and never requests process environments.
 
+The process inventory is collected once per scan and shared by service and AI classification.
+
 ## Project resolution
 
 Default roots are existing `~/Code`, `~/Developer`, and `~/Projects`. Users can add roots. Starting from a candidate CWD, the resolver walks upward only inside configured roots and stops at the first supported marker:
@@ -58,6 +60,37 @@ Every visible or Review result carries only the non-sensitive evidence labels re
 - Docker Compose: required `com.docker.compose.project` and `.service` labels
 
 Compose rows use published host ports and suppress raw Docker backend processes. Containers without Compose labels remain hidden. Non-Unix-socket Docker contexts fail closed before container listing.
+
+## AI activity rules
+
+AI activity is a separate process-only classifier. It matches exact executable basenames so generic
+application helpers such as `Codex Renderer`, `code-mode-host`, and Cursor UI services do not
+become false positives.
+
+| Tool | Recognized executable names |
+|---|---|
+| Codex | `codex` |
+| Claude | `claude` |
+| Gemini CLI | `gemini` |
+| Aider | `aider`, `aider-chat` |
+| OpenCode | `opencode` |
+| Goose | `goose` |
+| GitHub Copilot CLI | `copilot`, `github-copilot` |
+| Cursor Agent | `cursor-agent` |
+
+The known executable contributes 45 points. A recognized installation path contributes 20; a
+resolved project, TTY, IDE host, or desktop host contributes 15 each; recognized AI ancestry
+contributes 10. Activities require 60 points and have no Review queue. The UI reports only the
+non-sensitive evidence used by the score.
+
+The classifier labels an activity as CLI, VS Code, desktop, background, or subagent. Descendant
+helper processes contribute CPU, RSS, process count, and uptime to their nearest recognized AI
+ancestor. A separately executable AI child can remain its own subagent row.
+
+Watchio cannot safely infer a tool when macOS exposes only a generic `node` or `python` executable,
+because arguments are outside the collection contract. It also cannot enumerate logical agents,
+tasks, or conversations multiplexed inside one desktop process. Those cases remain hidden or
+appear as one host activity rather than weakening the privacy boundary.
 
 ## Grouping
 

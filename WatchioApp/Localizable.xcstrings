@@ -1,8 +1,12 @@
 {
   "sourceLanguage" : "en",
   "strings" : {
+    "AI activity" : { "comment" : "AI process view and settings section title" },
+    "Detect supported local AI tools" : { "comment" : "Enables process-only AI activity detection" },
+    "No AI activity" : { "comment" : "AI activity empty state title" },
     "No development services" : { "comment" : "Empty state title" },
     "Scan now" : { "comment" : "Runs development service detection immediately" },
+    "Watchio recognizes supported AI tools from process identity, project, TTY, and ancestry." : { "comment" : "AI activity empty state explanation" },
     "Watchio only shows stable processes with strong development evidence." : { "comment" : "Detection empty state explanation" }
   },
   "version" : "1.0"

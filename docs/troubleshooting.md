@@ -18,6 +18,18 @@ Open the menu bar app and wait for a scan. Widgets read snapshots and do not run
 
 Watchio intentionally does not inspect raw arguments or environments, so unusual launchers may need project or listener evidence.
 
+## A known AI tool is missing
+
+1. Confirm AI activity is enabled under Settings → Detection.
+2. Confirm the process has been stable for at least three seconds.
+3. Confirm the executable retains a supported name from [Detection](detection.md#ai-activity-rules).
+4. Add the project parent under Settings → Detection if the installation path is not recognized.
+
+Script-based tools sometimes appear to macOS only as `node` or `python`. Watchio does not inspect
+arguments to guess their identity, so those processes intentionally remain hidden. Likewise, a
+desktop tool may host several internal tasks in one process; Watchio reports the host activity and
+does not read its session database to enumerate conversations.
+
 ## A non-development process appears
 
 Open its detail and note the non-sensitive evidence. File a sanitized false-positive report with runtime, evidence, and whether it had a project marker/listener. Do not paste full paths, arguments, environments, or proprietary names.

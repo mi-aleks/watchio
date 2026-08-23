@@ -69,6 +69,124 @@ final class ClassifierAndEngineTests: XCTestCase {
     XCTAssertTrue(result.isIgnored)
   }
 
+  func testClassifiesKnownAIProcessesWithoutMatchingGUIHelpers() {
+    let vscode = process(
+      pid: 10, ppid: 1, pgid: 10, tty: nil,
+      path: "/Applications/Visual Studio Code.app/Contents/MacOS/Code Helper (Plugin)")
+    let claude = process(
+      pid: 11, ppid: 10, pgid: 10, tty: nil,
+      path: "/Users/demo/.vscode/extensions/anthropic.claude-code-2/resources/claude")
+    let records = [vscode.pid: vscode, claude.pid: claude]
+
+    let classification = AIProcessClassifier.classify(
+      process: claude, project: project, processByPID: records)
+
+    XCTAssertEqual(classification?.tool, .claude)
+    XCTAssertEqual(classification?.host, .visualStudioCode)
+    XCTAssertGreaterThanOrEqual(classification?.confidence ?? 0, 60)
+    XCTAssertTrue(classification?.evidence.contains(.ideHost) == true)
+    for path in [
+      "/Applications/ChatGPT.app/Contents/Frameworks/Codex (Renderer).app/Contents/MacOS/Codex (Renderer)",
+      "/Applications/ChatGPT.app/Contents/Resources/codex-code-mode-host",
+      "/System/Library/CoreServices/CursorUIViewService",
+    ] {
+      XCTAssertNil(AIProcessClassifier.tool(for: process(tty: nil, path: path)))
+    }
+  }
+
+  func testMapsEverySupportedAIExecutableExactly() {
+    let expected: [(String, AIToolKind)] = [
+      ("/trusted/codex", .codex),
+      ("/trusted/claude", .claude),
+      ("/trusted/gemini", .gemini),
+      ("/trusted/aider", .aider),
+      ("/trusted/aider-chat", .aider),
+      ("/trusted/opencode", .openCode),
+      ("/trusted/goose", .goose),
+      ("/trusted/copilot", .copilot),
+      ("/trusted/github-copilot", .copilot),
+      ("/trusted/cursor-agent", .cursor),
+    ]
+
+    for (path, tool) in expected {
+      XCTAssertEqual(AIProcessClassifier.tool(for: process(path: path)), tool, path)
+    }
+    for path in ["/trusted/node", "/trusted/python3", "/trusted/codex-helper"] {
+      XCTAssertNil(AIProcessClassifier.tool(for: process(path: path)), path)
+    }
+  }
+
+  func testSeparatelyExecutableAIChildBecomesSubagent() async {
+    let parent = process(
+      pid: 600, ppid: 10, pgid: 600, path: "/Users/demo/.local/bin/claude")
+    let child = process(
+      pid: 601, ppid: 600, pgid: 600, path: "/Users/demo/.local/bin/claude")
+    let helper = process(pid: 602, ppid: 601, pgid: 600, path: "/usr/local/bin/helper")
+    let engine = DetectionEngine(
+      processProvider: ProcessFixture([parent, child, helper]),
+      listenerProvider: ListenerFixture([]), containerProvider: ContainerFixture([]),
+      projectResolver: ProjectFixture([600: project, 601: project]), currentUID: 501
+    )
+
+    let result = await engine.scan(preferences: .init(projectRoots: ["/Users/demo/Code"]))
+
+    XCTAssertEqual(result.aiActivities.count, 2)
+    XCTAssertEqual(result.aiActivities.first { $0.representativePID == 600 }?.host, .terminal)
+    XCTAssertEqual(result.aiActivities.first { $0.representativePID == 600 }?.processCount, 1)
+    XCTAssertEqual(result.aiActivities.first { $0.representativePID == 601 }?.host, .subagent)
+    XCTAssertEqual(result.aiActivities.first { $0.representativePID == 601 }?.processCount, 2)
+  }
+
+  func testEngineGroupsAIHelpersUnderToolRoots() async {
+    let vscode = process(
+      pid: 10, ppid: 1, pgid: 10, tty: nil,
+      path: "/Applications/Visual Studio Code.app/Contents/MacOS/Code Helper (Plugin)")
+    let codex = process(
+      pid: 100, ppid: 10, pgid: 10, tty: nil,
+      path: "/Users/demo/.vscode/extensions/openai.chatgpt-1/bin/codex")
+    let codexHelper = process(
+      pid: 101, ppid: 100, pgid: 101, tty: nil,
+      path: "/Applications/ChatGPT.app/Contents/Resources/codex-code-mode-host")
+    let claude = process(
+      pid: 200, ppid: 10, pgid: 10, tty: nil,
+      path: "/Users/demo/.vscode/extensions/anthropic.claude-code-2/resources/claude")
+    let claudeHelper = process(
+      pid: 201, ppid: 200, pgid: 201, tty: nil, path: "/usr/local/bin/helper")
+    let untrustedCodex = process(
+      pid: 300, ppid: 1, pgid: 300, tty: nil, path: "/private/tmp/codex")
+    let engine = DetectionEngine(
+      processProvider: ProcessFixture([
+        vscode, codex, codexHelper, claude, claudeHelper, untrustedCodex,
+      ]),
+      listenerProvider: ListenerFixture([]), containerProvider: ContainerFixture([]),
+      projectResolver: ProjectFixture([200: project]), currentUID: 501,
+      now: { Date(timeIntervalSince1970: 10_000) }
+    )
+
+    let result = await engine.scan(
+      preferences: DetectionPreferences(projectRoots: ["/Users/demo/Code"]))
+
+    XCTAssertEqual(result.aiActivities.map(\.tool), [.claude, .codex])
+    XCTAssertEqual(result.aiActivities.map(\.processCount), [2, 2])
+    XCTAssertEqual(result.aiActivities.first?.projectName, "watchio")
+    XCTAssertEqual(result.aiActivities.last?.host, .visualStudioCode)
+  }
+
+  func testAIActivityCanBeDisabled() async {
+    let claude = process(pid: 500, path: "/Users/demo/.local/bin/claude")
+    var preferences = DetectionPreferences(projectRoots: ["/Users/demo/Code"])
+    preferences.observeAIActivity = false
+    let engine = DetectionEngine(
+      processProvider: ProcessFixture([claude]), listenerProvider: ListenerFixture([]),
+      containerProvider: ContainerFixture([]), projectResolver: ProjectFixture([500: project]),
+      currentUID: 501
+    )
+
+    let result = await engine.scan(preferences: preferences)
+
+    XCTAssertTrue(result.aiActivities.isEmpty)
+  }
+
   func testEngineGroupsChildrenAggregatesPortsAndQueuesSuggestions() async throws {
     let records = [
       process(pid: 100, ppid: 10, pgid: 100, path: "/Users/demo/.nvm/bin/node"),

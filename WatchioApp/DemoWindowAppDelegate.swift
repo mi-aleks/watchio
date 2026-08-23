@@ -11,7 +11,10 @@ final class DemoWindowAppDelegate: NSObject, NSApplicationDelegate {
     guard ProcessInfo.processInfo.arguments.contains("--screenshot-mode") else { return }
     let arguments = ProcessInfo.processInfo.arguments
     let showOnboarding = arguments.contains("--show-onboarding")
-    let model = AppModel(demoMode: true, showOnboarding: showOnboarding)
+    let model =
+      arguments.contains("--live-data")
+      ? WatchioRuntime.model : AppModel(demoMode: true, showOnboarding: showOnboarding)
+    if arguments.contains("--ai-mode") { model.selectedMode = .ai }
     let controller = NSHostingController(rootView: MenuBarContentView().environment(model))
     let window = NSWindow(contentViewController: controller)
     window.title = "Watchio"
