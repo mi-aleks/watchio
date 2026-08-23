@@ -4,7 +4,14 @@ DESTINATION ?= platform=macOS,arch=arm64
 XCODEBUILD := xcodebuild -project Watchio.xcodeproj -scheme Watchio -destination '$(DESTINATION)' -derivedDataPath '$(DERIVED_DATA)' CODE_SIGNING_ALLOWED=NO
 SWIFT_SOURCES := WatchioApp WatchioWidget WatchioSharedUI WatchioUITests Packages/WatchioCore/Sources Packages/WatchioCore/Tests
 
-.PHONY: format format-check test ui-test build release-build coverage privacy-check docs-check check
+.PHONY: install install-check format format-check test ui-test build release-build coverage privacy-check docs-check check
+
+install:
+	./Scripts/install-local.sh
+
+install-check:
+	test -x Scripts/install-local.sh
+	/bin/bash -n Scripts/install-local.sh
 
 format:
 	xcrun swift-format format --in-place --recursive $(SWIFT_SOURCES)
@@ -33,4 +40,4 @@ privacy-check:
 docs-check:
 	ruby Scripts/check-doc-links.rb
 
-check: format-check test privacy-check docs-check build
+check: install-check format-check test privacy-check docs-check build
