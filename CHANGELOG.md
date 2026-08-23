@@ -6,7 +6,10 @@ All notable changes follow [Keep a Changelog](https://keepachangelog.com/en/1.1.
 
 ### Changed
 
-- Nothing yet.
+- Reworked the menu bar and every widget family around the darker, denser visual language from
+  the original Watchio concept.
+- Replaced generic text badges with original runtime glyphs and database-aware Docker Compose
+  presentation.
 
 ## [0.1.0-alpha.1] - 2026-08-23
 

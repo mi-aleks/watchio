@@ -132,12 +132,11 @@ struct WatchioWidgetView: View {
         content
       }
     }
-    .padding()
+    .padding(family == .systemSmall ? 13 : 14)
     .containerBackground(for: .widget) {
-      LinearGradient(
-        colors: [Color.accentColor.opacity(0.12), Color.clear], startPoint: .topLeading,
-        endPoint: .bottomTrailing)
+      WatchioSurface()
     }
+    .environment(\.colorScheme, .dark)
     .widgetURL(URL(string: "watchio://services"))
   }
 
@@ -172,84 +171,140 @@ struct WatchioWidgetView: View {
   }
 
   private var smallServices: some View {
-    VStack(alignment: .leading, spacing: 5) {
+    VStack(spacing: 0) {
       widgetHeader
       Spacer()
-      Text(services.count, format: .number)
-        .font(.system(size: 42, weight: .black, design: .rounded))
-        .contentTransition(.numericText())
-      Text(services.count == 1 ? "service is live" : "services are live")
-        .font(.caption).foregroundStyle(.secondary)
-      HStack(spacing: 5) {
-        ForEach(Array(Set(services.flatMap(\.ports).map(\.port))).sorted().prefix(3), id: \.self) {
-          port in
-          Text(":\(port)").font(.system(.caption2, design: .monospaced, weight: .semibold))
+      ZStack {
+        Circle()
+          .fill(
+            RadialGradient(
+              colors: [WatchioPalette.accent.opacity(0.12), .clear],
+              center: .center,
+              startRadius: 0,
+              endRadius: 48
+            )
+          )
+        Circle().stroke(WatchioPalette.accent.opacity(0.22), lineWidth: 1)
+        Circle().stroke(WatchioPalette.accent.opacity(0.04), lineWidth: 7)
+        VStack(spacing: 1) {
+          Text(services.count, format: .number)
+            .font(.system(size: 28, weight: .medium, design: .monospaced))
+            .foregroundStyle(Color(red: 0.82, green: 1, blue: 0.66))
+            .contentTransition(.numericText())
+          Text("LIVE")
+            .font(.system(size: 8, weight: .bold, design: .rounded))
+            .tracking(1.2)
+            .foregroundStyle(WatchioPalette.secondaryText)
         }
       }
+      .frame(width: 76, height: 76)
+      Spacer()
+      Text(services.isEmpty ? "No services detected" : "Systems nominal")
+        .font(.system(size: 12, weight: .semibold))
+      HStack(spacing: 7) {
+        ForEach(Array(Set(services.flatMap(\.ports).map(\.port))).sorted().prefix(3), id: \.self) {
+          port in
+          Text(":\(port)")
+            .font(.system(size: 9, weight: .semibold, design: .monospaced))
+            .foregroundStyle(WatchioPalette.secondaryText)
+        }
+      }
+      .frame(height: 13)
     }
   }
 
   private func serviceList(limit: Int) -> some View {
-    VStack(alignment: .leading, spacing: family == .systemLarge ? 9 : 6) {
+    VStack(alignment: .leading, spacing: family == .systemLarge ? 7 : 4) {
       widgetHeader
       ForEach(Array(services.prefix(limit))) { service in
-        WidgetServiceRow(service: service)
+        WidgetServiceRow(service: service, expanded: family == .systemLarge)
       }
-      if services.isEmpty { Text("No services detected").foregroundStyle(.secondary) }
+      if services.isEmpty {
+        Text("No services detected").font(.caption).foregroundStyle(WatchioPalette.secondaryText)
+      }
       Spacer(minLength: 0)
       if family == .systemLarge { aggregateFooter }
     }
   }
 
   private var portList: some View {
-    VStack(alignment: .leading, spacing: 8) {
+    VStack(alignment: .leading, spacing: family == .systemLarge ? 7 : 4) {
       widgetHeader
       ForEach(
         Array(
           services.flatMap { service in service.ports.map { (service, $0) } }.prefix(
             family == .systemSmall ? 3 : 6)), id: \.1.id
       ) { item in
-        HStack {
-          Text(item.1.displayValue).font(.system(.headline, design: .monospaced, weight: .bold))
-          Text(item.1.transport.rawValue.uppercased()).font(.caption2).foregroundStyle(.secondary)
+        HStack(spacing: 8) {
+          if family != .systemSmall {
+            RuntimeGlyph(runtime: item.0.runtime, serviceName: item.0.name, size: 26)
+          }
+          Text(item.1.displayValue)
+            .font(.system(.headline, design: .monospaced, weight: .semibold))
+            .foregroundStyle(WatchioPalette.accent)
+          Text(item.1.transport.rawValue.uppercased())
+            .font(.system(size: 8, weight: .bold, design: .rounded))
+            .foregroundStyle(WatchioPalette.secondaryText)
           Spacer()
-          if family != .systemSmall { Text(item.0.name).lineLimit(1).foregroundStyle(.secondary) }
+          if family != .systemSmall {
+            Text(item.0.name).font(.caption).lineLimit(1).foregroundStyle(.white.opacity(0.8))
+          }
         }
+        .padding(.horizontal, 8)
+        .padding(.vertical, family == .systemLarge ? 6 : 3)
+        .background(WatchioPalette.card, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
       }
       Spacer(minLength: 0)
     }
   }
 
   private var healthView: some View {
-    VStack(alignment: .leading, spacing: 8) {
+    VStack(alignment: .leading, spacing: family == .systemLarge ? 8 : 5) {
       widgetHeader
       ForEach(entry.snapshot.sourceHealth.prefix(family == .systemSmall ? 3 : 4)) { source in
-        HStack {
-          Circle().fill(source.state == .available ? .green : .orange).frame(width: 7, height: 7)
-          Text(source.source.rawValue.capitalized)
+        HStack(spacing: 8) {
+          Image(
+            systemName: source.state == .available
+              ? "checkmark.circle.fill" : "exclamationmark.triangle.fill"
+          )
+          .foregroundStyle(source.state == .available ? WatchioPalette.accentSoft : .orange)
+          Text(source.source.rawValue.capitalized).fontWeight(.semibold)
           Spacer()
           if family != .systemSmall {
-            Text(source.state.rawValue.capitalized).foregroundStyle(.secondary)
+            Text(source.state.rawValue.capitalized).foregroundStyle(WatchioPalette.secondaryText)
           }
         }
         .font(.caption)
+        .padding(.horizontal, 8)
+        .padding(.vertical, family == .systemLarge ? 8 : 5)
+        .background(WatchioPalette.card, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
       }
       Spacer(minLength: 0)
     }
   }
 
   private var widgetHeader: some View {
-    HStack {
-      Text("w:").font(.system(.headline, design: .monospaced, weight: .black)).foregroundStyle(
-        .tint)
+    HStack(spacing: 8) {
+      WatchioMark(compact: true)
+      if family != .systemSmall {
+        VStack(alignment: .leading, spacing: 1) {
+          Text("Local development")
+            .font(.system(size: 11, weight: .semibold))
+          Text("\(services.count) running · all projects")
+            .font(.system(size: 8.5))
+            .foregroundStyle(WatchioPalette.secondaryText)
+        }
+      }
       Spacer()
-      Text(entry.snapshot.generatedAt, style: .timer).font(.caption2).foregroundStyle(.secondary)
+      Text(entry.snapshot.generatedAt, style: .timer)
+        .font(.system(size: 8.5, design: .monospaced))
+        .foregroundStyle(WatchioPalette.secondaryText)
         .monospacedDigit()
     }
   }
 
   private var aggregateFooter: some View {
-    VStack(spacing: 6) {
+    HStack(spacing: 8) {
       HStack {
         metric("CPU", String(format: "%.1f%%", services.compactMap(\.cpuPercent).reduce(0, +)))
         metric(
@@ -260,51 +315,90 @@ struct WatchioWidgetView: View {
           ))
         metric("Listeners", String(services.flatMap(\.ports).count))
       }
+      Divider().overlay(Color.white.opacity(0.09)).padding(.vertical, 2)
       MiniTrend(samples: entry.trend)
-        .frame(height: 24)
+        .frame(width: 86, height: 34)
         .accessibilityLabel("Recent in-memory CPU activity")
+    }
+    .padding(10)
+    .background(WatchioPalette.card, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+    .overlay {
+      RoundedRectangle(cornerRadius: 12, style: .continuous)
+        .stroke(WatchioPalette.cardBorder, lineWidth: 1)
     }
   }
 
   private func metric(_ label: String, _ value: String) -> some View {
     VStack(alignment: .leading, spacing: 1) {
-      Text(label).font(.caption2).foregroundStyle(.secondary)
-      Text(value).font(.system(.caption, design: .monospaced, weight: .semibold))
+      Text(label).font(.system(size: 8)).foregroundStyle(WatchioPalette.secondaryText)
+      Text(value).font(.system(size: 10, weight: .semibold, design: .monospaced))
     }.frame(maxWidth: .infinity, alignment: .leading)
   }
 
   private func stateView(_ title: String, _ symbol: String, _ detail: String) -> some View {
     VStack(alignment: .leading, spacing: 8) {
-      Text("w:").font(.system(.headline, design: .monospaced, weight: .black)).foregroundStyle(
-        .tint)
+      WatchioMark(compact: true)
       Spacer()
-      Image(systemName: symbol).font(.title2).foregroundStyle(.secondary)
+      Image(systemName: symbol).font(.title2).foregroundStyle(WatchioPalette.secondaryText)
       Text(title).font(.headline)
-      Text(detail).font(.caption).foregroundStyle(.secondary).lineLimit(2)
+      Text(detail).font(.caption).foregroundStyle(WatchioPalette.secondaryText).lineLimit(2)
     }
   }
 }
 
 private struct WidgetServiceRow: View {
   let service: DetectedService
+  let expanded: Bool
 
   var body: some View {
     Link(destination: URL(string: "watchio://service/\(service.id)")!) {
-      HStack(spacing: 8) {
-        Text(service.runtime.badge)
-          .font(.system(size: 9, weight: .bold, design: .monospaced))
-          .frame(width: 26, height: 20)
-          .background(.tint.opacity(0.14), in: RoundedRectangle(cornerRadius: 5))
-        VStack(alignment: .leading, spacing: 1) {
-          Text(service.name).font(.caption.weight(.semibold)).lineLimit(1)
-          Text(service.projectName).font(.caption2).foregroundStyle(.secondary).lineLimit(1)
+      HStack(spacing: expanded ? 9 : 7) {
+        RuntimeGlyph(
+          runtime: service.runtime,
+          serviceName: service.name,
+          size: expanded ? 34 : 26
+        )
+        VStack(alignment: .leading, spacing: expanded ? 2 : 0) {
+          HStack(spacing: 5) {
+            Text(service.name)
+              .font(.system(size: expanded ? 11 : 9.5, weight: .semibold))
+              .lineLimit(1)
+            Circle()
+              .fill(WatchioPalette.accentSoft)
+              .frame(width: 4, height: 4)
+          }
+          Text(service.projectName)
+            .font(.system(size: expanded ? 8.5 : 7.5))
+            .foregroundStyle(WatchioPalette.secondaryText)
+            .lineLimit(1)
         }
         Spacer()
         if let port = service.ports.first {
-          Text(port.displayValue).font(.system(.caption, design: .monospaced, weight: .semibold))
+          Text(port.displayValue)
+            .font(.system(size: expanded ? 10 : 9, weight: .semibold, design: .monospaced))
+            .foregroundStyle(WatchioPalette.accent)
+            .padding(.horizontal, 6)
+            .padding(.vertical, 3)
+            .background(
+              WatchioPalette.accent.opacity(0.085),
+              in: RoundedRectangle(cornerRadius: 6, style: .continuous)
+            )
+        } else if expanded {
+          Text("worker")
+            .font(.system(size: 8, design: .monospaced))
+            .foregroundStyle(WatchioPalette.secondaryText)
         }
-        Text(widgetUptime(service)).font(.caption2).foregroundStyle(.secondary).frame(
-          width: 42, alignment: .trailing)
+        Text(widgetUptime(service))
+          .font(.system(size: expanded ? 8.5 : 7.5, design: .monospaced))
+          .foregroundStyle(WatchioPalette.secondaryText)
+          .frame(width: expanded ? 34 : 27, alignment: .trailing)
+      }
+      .padding(.horizontal, expanded ? 9 : 6)
+      .padding(.vertical, expanded ? 6 : 2)
+      .background(WatchioPalette.card, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+      .overlay {
+        RoundedRectangle(cornerRadius: 10, style: .continuous)
+          .stroke(WatchioPalette.cardBorder, lineWidth: 1)
       }
     }
     .buttonStyle(.plain)
@@ -323,20 +417,23 @@ private struct MiniTrend: View {
   var body: some View {
     GeometryReader { geometry in
       let maximum = max(samples.map(\.cpuPercent).max() ?? 1, 1)
-      Path { path in
-        for (index, sample) in samples.enumerated() {
-          let x =
-            samples.count <= 1
-            ? 0 : geometry.size.width * CGFloat(index) / CGFloat(samples.count - 1)
-          let y = geometry.size.height * (1 - CGFloat(sample.cpuPercent / maximum))
-          if index == 0 {
-            path.move(to: CGPoint(x: x, y: y))
-          } else {
-            path.addLine(to: CGPoint(x: x, y: y))
-          }
+      HStack(alignment: .bottom, spacing: 3) {
+        ForEach(Array(samples.enumerated()), id: \.offset) { _, sample in
+          RoundedRectangle(cornerRadius: 1.5, style: .continuous)
+            .fill(
+              LinearGradient(
+                colors: [WatchioPalette.accentSoft, WatchioPalette.accent],
+                startPoint: .bottom,
+                endPoint: .top
+              )
+            )
+            .frame(
+              maxWidth: .infinity,
+              minHeight: 3,
+              maxHeight: max(3, geometry.size.height * CGFloat(sample.cpuPercent / maximum))
+            )
         }
       }
-      .stroke(.tint, style: StrokeStyle(lineWidth: 2, lineCap: .round, lineJoin: .round))
     }
   }
 }
@@ -376,6 +473,7 @@ struct WatchioWidget: Widget {
     .configurationDisplayName("Watchio")
     .description("See the development services and ports Watchio detected locally.")
     .supportedFamilies([.systemSmall, .systemMedium, .systemLarge])
+    .contentMarginsDisabled()
   }
 }
 

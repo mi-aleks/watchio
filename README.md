@@ -22,6 +22,8 @@ Watchio `0.1.0-alpha.1` is source-only. It is not signed, notarized, distributed
 ## Why Watchio
 
 - Native SwiftUI menu bar app and Small, Medium, and Large widgets
+- Original runtime glyphs make Node.js, Go, Python, Bun, Deno, containers, and common Compose
+  databases recognizable at a glance
 - Automatic, explainable detection instead of a manually maintained service list
 - First-class Node.js, Bun, Deno, Go, Python, and Docker Compose support
 - Observe-only: Watchio cannot stop, restart, or otherwise change a process

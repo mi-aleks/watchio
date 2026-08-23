@@ -7,7 +7,9 @@ final class WatchioUITests: XCTestCase {
 
     XCTAssertTrue(app.staticTexts["4 development services"].waitForExistence(timeout: 5))
     XCTAssertTrue(app.buttons["scan-now"].exists)
-    XCTAssertTrue(app.buttons["service-demo-web"].exists)
+    XCTAssertEqual(app.buttons["service-demo-web"].value as? String, "Node.js icon")
+    XCTAssertEqual(app.buttons["service-demo-api"].value as? String, "Go icon")
+    XCTAssertEqual(app.buttons["service-demo-db"].value as? String, "Database icon")
   }
 
   func testOnboardingDefaultActionCompletesIntroduction() {
