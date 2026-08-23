@@ -535,13 +535,20 @@ private struct WidgetAIActivityRow: View {
             .lineLimit(1)
         }
         Spacer()
-        Text(activity.host.displayName)
-          .font(.system(size: expanded ? 8 : 7.5, weight: .medium, design: .rounded))
-          .foregroundStyle(.white.opacity(0.68))
-        Text(widgetUptime(activity))
-          .font(.system(size: expanded ? 8.5 : 7.5, design: .monospaced))
-          .foregroundStyle(WatchioPalette.secondaryText)
-          .frame(width: expanded ? 34 : 27, alignment: .trailing)
+        VStack(alignment: .trailing, spacing: 2) {
+          HStack(spacing: 6) {
+            Text(activity.host.displayName)
+              .font(.system(size: expanded ? 8 : 7.5, weight: .medium, design: .rounded))
+              .foregroundStyle(.white.opacity(0.68))
+            Text(widgetUptime(activity))
+              .font(.system(size: expanded ? 8.5 : 7.5, design: .monospaced))
+              .foregroundStyle(WatchioPalette.secondaryText)
+          }
+          Text("CPU \(widgetCPU(activity.cpuPercent)) · RAM \(widgetMemory(activity.memoryBytes))")
+            .font(.system(size: expanded ? 7.5 : 6.5, weight: .medium, design: .monospaced))
+            .foregroundStyle(Color.white.opacity(0.56))
+            .lineLimit(1)
+        }
       }
       .padding(.horizontal, expanded ? 9 : 6)
       .padding(.vertical, expanded ? 6 : 2)
@@ -558,6 +565,16 @@ private struct WidgetAIActivityRow: View {
     let value = activity.uptime()
     if value >= 3_600 { return "\(Int(value / 3_600))h" }
     return "\(max(1, Int(value / 60)))m"
+  }
+
+  private func widgetCPU(_ value: Double) -> String {
+    String(format: "%.1f%%", value)
+  }
+
+  private func widgetMemory(_ bytes: UInt64) -> String {
+    let mebibytes = Double(bytes) / 1_048_576
+    if mebibytes >= 1_024 { return String(format: "%.1f GB", mebibytes / 1_024) }
+    return "\(Int(mebibytes.rounded())) MB"
   }
 }
 

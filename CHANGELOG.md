@@ -10,6 +10,7 @@ All notable changes follow [Keep a Changelog](https://keepachangelog.com/en/1.1.
   OpenCode, Goose, GitHub Copilot CLI, and Cursor Agent.
 - Added host classification for CLI, VS Code, desktop, background, and separately executable
   subagent processes, with descendant resource aggregation and explainable confidence evidence.
+- Added always-visible CPU and resident RAM totals to AI rows and Medium/Large AI widgets.
 
 ### Changed
 

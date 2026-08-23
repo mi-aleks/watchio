@@ -274,19 +274,30 @@ private struct AIActivityRow: View {
             .lineLimit(1)
         }
         Spacer()
-        Text(activity.host.displayName)
-          .font(.system(size: 9, weight: .medium, design: .rounded))
-          .foregroundStyle(.white.opacity(0.68))
-          .padding(.horizontal, 7)
-          .padding(.vertical, 4)
-          .background(Color.white.opacity(0.045), in: RoundedRectangle(cornerRadius: 7))
-        Text(WatchioFormat.uptime(activity))
-          .font(.system(size: 10, design: .monospaced))
-          .foregroundStyle(WatchioPalette.secondaryText)
-          .frame(width: 44, alignment: .trailing)
-        Image(systemName: selected ? "chevron.up" : "chevron.down")
-          .font(.system(size: 8, weight: .bold))
-          .foregroundStyle(WatchioPalette.tertiaryText)
+        VStack(alignment: .trailing, spacing: 5) {
+          HStack(spacing: 8) {
+            Text(activity.host.displayName)
+              .font(.system(size: 9, weight: .medium, design: .rounded))
+              .foregroundStyle(.white.opacity(0.68))
+              .padding(.horizontal, 7)
+              .padding(.vertical, 4)
+              .background(Color.white.opacity(0.045), in: RoundedRectangle(cornerRadius: 7))
+            Text(WatchioFormat.uptime(activity))
+              .font(.system(size: 10, design: .monospaced))
+              .foregroundStyle(WatchioPalette.secondaryText)
+              .frame(width: 44, alignment: .trailing)
+            Image(systemName: selected ? "chevron.up" : "chevron.down")
+              .font(.system(size: 8, weight: .bold))
+              .foregroundStyle(WatchioPalette.tertiaryText)
+          }
+          HStack(spacing: 9) {
+            AIResourceMetric(
+              systemImage: "cpu", label: "CPU", value: WatchioFormat.cpu(activity.cpuPercent))
+            AIResourceMetric(
+              systemImage: "memorychip", label: "RAM",
+              value: WatchioFormat.bytes(activity.memoryBytes))
+          }
+        }
       }
       .padding(10)
       .contentShape(Rectangle())
@@ -300,7 +311,9 @@ private struct AIActivityRow: View {
       RoundedRectangle(cornerRadius: 13, style: .continuous)
         .stroke(selected ? Color.white.opacity(0.13) : WatchioPalette.cardBorder, lineWidth: 1)
     }
-    .accessibilityValue("\(activity.tool.displayName), \(activity.host.displayName)")
+    .accessibilityValue(
+      "\(activity.tool.displayName), \(activity.host.displayName), CPU \(WatchioFormat.cpu(activity.cpuPercent)), RAM \(WatchioFormat.bytes(activity.memoryBytes))"
+    )
     .accessibilityIdentifier("ai-activity-\(activity.id)")
   }
 
@@ -311,6 +324,24 @@ private struct AIActivityRow: View {
   }
 }
 
+private struct AIResourceMetric: View {
+  let systemImage: String
+  let label: String
+  let value: String
+
+  var body: some View {
+    HStack(spacing: 3) {
+      Image(systemName: systemImage)
+        .font(.system(size: 8, weight: .medium))
+      Text(value)
+        .font(.system(size: 8.5, weight: .medium, design: .monospaced))
+    }
+    .foregroundStyle(Color.white.opacity(0.58))
+    .accessibilityElement(children: .ignore)
+    .accessibilityLabel("\(label) \(value)")
+  }
+}
+
 private struct AIActivityDetail: View {
   let activity: DetectedAIActivity
 
@@ -318,8 +349,8 @@ private struct AIActivityDetail: View {
     Grid(alignment: .leading, horizontalSpacing: 14, verticalSpacing: 6) {
       detail("PID", String(activity.representativePID))
       detail("Processes", String(activity.processCount))
-      detail("CPU", String(format: "%.1f%%", activity.cpuPercent))
-      detail("Memory", WatchioFormat.bytes(activity.memoryBytes))
+      detail("CPU (process tree)", WatchioFormat.cpu(activity.cpuPercent))
+      detail("RAM (RSS process tree)", WatchioFormat.bytes(activity.memoryBytes))
       detail("Host", activity.host.displayName)
       detail("Confidence", "\(activity.confidence)%")
       GridRow {

@@ -15,9 +15,17 @@ final class WatchioUITests: XCTestCase {
   func testDemoAIActivityExposesToolAndHostSemantics() {
     let app = launchApp(additionalArguments: ["--ai-mode"])
 
-    XCTAssertEqual(app.buttons["ai-activity-demo-ai-codex"].value as? String, "Codex, Desktop")
-    XCTAssertEqual(
-      app.buttons["ai-activity-demo-ai-claude-atlas"].value as? String, "Claude, CLI")
+    let codexValue = try? XCTUnwrap(
+      app.buttons["ai-activity-demo-ai-codex"].value as? String)
+    XCTAssertTrue(codexValue?.contains("Codex, Desktop") == true)
+    XCTAssertTrue(codexValue?.contains("CPU 2.4%") == true)
+    XCTAssertTrue(codexValue?.contains("RAM") == true)
+
+    let claudeValue = try? XCTUnwrap(
+      app.buttons["ai-activity-demo-ai-claude-atlas"].value as? String)
+    XCTAssertTrue(claudeValue?.contains("Claude, CLI") == true)
+    XCTAssertTrue(claudeValue?.contains("CPU 1.6%") == true)
+    XCTAssertTrue(claudeValue?.contains("RAM") == true)
   }
 
   func testOnboardingDefaultActionCompletesIntroduction() {
