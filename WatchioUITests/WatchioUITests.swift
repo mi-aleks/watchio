@@ -38,11 +38,13 @@ final class WatchioUITests: XCTestCase {
     XCTAssertTrue(stopTree.waitForExistence(timeout: 3))
     stopTree.click()
 
-    let stopNow = app.buttons["Stop now"]
-    let cancel = app.buttons["Cancel"]
+    let confirmation = app.windows["Watchio"].sheets.firstMatch
+    XCTAssertTrue(confirmation.waitForExistence(timeout: 3))
+    let stopNow = confirmation.buttons["Stop now"]
+    let cancel = confirmation.buttons["Cancel"]
     XCTAssertTrue(stopNow.waitForExistence(timeout: 3))
     XCTAssertTrue(cancel.exists)
-    XCTAssertTrue(app.staticTexts["Stop Codex process tree?"].exists)
+    XCTAssertTrue(confirmation.staticTexts["Stop Codex process tree?"].exists)
     cancel.click()
     XCTAssertTrue(stopNow.waitForNonExistence(timeout: 2))
   }
