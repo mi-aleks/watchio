@@ -18,6 +18,7 @@ final class DemoWindowAppDelegate: NSObject, NSApplicationDelegate, UNUserNotifi
       arguments.contains("--live-data")
       ? WatchioRuntime.model : AppModel(demoMode: true, showOnboarding: showOnboarding)
     if arguments.contains("--ai-mode") { model.selectedMode = .ai }
+    if arguments.contains("--health-mode") { model.selectedMode = .health }
     let controller = NSHostingController(rootView: MenuBarContentView().environment(model))
     let window = NSWindow(contentViewController: controller)
     window.title = "Watchio"

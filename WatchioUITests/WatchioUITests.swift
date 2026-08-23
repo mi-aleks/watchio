@@ -80,8 +80,7 @@ final class WatchioUITests: XCTestCase {
   }
 
   func testDemoHealthShowsSubtleResourceAlert() {
-    let app = launchApp()
-    app.buttons["Health"].click()
+    let app = launchApp(additionalArguments: ["--health-mode"])
 
     XCTAssertTrue(
       app.descendants(matching: .any)["resource-alert-memory:service:demo-web"]

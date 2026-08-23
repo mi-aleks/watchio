@@ -1,7 +1,7 @@
 import Foundation
 import Observation
 import ServiceManagement
-import UserNotifications
+@preconcurrency import UserNotifications
 import WatchioDetection
 import WatchioModels
 import WatchioStorage
