@@ -4,6 +4,10 @@ All notable changes follow [Keep a Changelog](https://keepachangelog.com/en/1.1.
 
 ## [Unreleased]
 
+### Fixed
+
+- Ensure Settings is activated and brought forward when opened from the menu bar.
+
 ### Added
 
 - Added a process-only AI activity view and widget mode for Codex, Claude, Gemini CLI, Aider,

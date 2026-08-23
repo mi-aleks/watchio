@@ -4,6 +4,7 @@ import WatchioModels
 
 struct MenuBarContentView: View {
   @Environment(AppModel.self) private var model
+  @Environment(\.openSettings) private var openSettings
 
   var body: some View {
     @Bindable var model = model
@@ -253,8 +254,14 @@ struct MenuBarContentView: View {
         .font(.caption2)
         .foregroundStyle(WatchioPalette.secondaryText)
       Spacer()
-      SettingsLink { Label("Settings", systemImage: "gearshape") }
-        .buttonStyle(.plain)
+      Button {
+        NSApplication.shared.activate(ignoringOtherApps: true)
+        openSettings()
+      } label: {
+        Label("Settings", systemImage: "gearshape")
+      }
+      .accessibilityIdentifier("open-settings")
+      .buttonStyle(.plain)
       Divider().overlay(Color.white.opacity(0.14)).frame(height: 14)
       Button("Quit") { NSApplication.shared.terminate(nil) }
         .buttonStyle(.plain)

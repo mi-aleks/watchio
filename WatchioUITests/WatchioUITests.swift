@@ -60,7 +60,9 @@ final class WatchioUITests: XCTestCase {
 
   func testSettingsExposeLoginAndDetectionControls() {
     let app = launchApp()
-    app.buttons["Settings"].click()
+    let settings = app.buttons["open-settings"]
+    XCTAssertTrue(settings.waitForExistence(timeout: 3))
+    settings.click()
 
     app.buttons["General"].click()
     let launchAtLogin = app.descendants(matching: .any)["launch-at-login"]
