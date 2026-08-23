@@ -12,8 +12,9 @@ struct WatchioApp: App {
     } label: {
       Label(
         model.menuBarTitle,
-        systemImage: model.snapshot.collectorState == .degraded
-          ? "exclamationmark.circle" : "terminal"
+        systemImage: !model.snapshot.resourceAlerts.isEmpty
+          ? "exclamationmark.triangle.fill"
+          : (model.snapshot.collectorState == .degraded ? "exclamationmark.circle" : "terminal")
       )
       .accessibilityLabel(
         "Watchio, \(model.snapshot.services.count) active services and \(model.snapshot.aiActivities.count) AI activities"

@@ -29,9 +29,20 @@ non-sensitive evidence. Watchio does not persist historical samples. A bounded r
 exists only in process memory and disappears when the owning process exits. Detection preferences
 are stored in shared local defaults.
 
+An active resource alert adds only the safe row identifier and display name, alert kind, aggregate
+resident-memory or CPU value, configured threshold, and detection time to that latest snapshot.
+Alert streaks, recovery hysteresis, and notification cooldowns exist only in memory. Watchio reads
+the current local power-source type to decide whether an energy alert applies; it does not store
+battery level or battery history.
+
 ## Network and privileges
 
 Watchio contains no application networking client and makes no Watchio-originated outbound requests. It does not ask for root, Full Disk Access, Accessibility, or Automation permission. The visible collector is nonsandboxed to inspect same-user process metadata and perform an explicitly confirmed same-user process-tree stop; the widget is sandboxed.
+
+Quiet local resource notifications are optional and use Apple's User Notifications framework. The
+system permission prompt appears only after the person enables them in Settings. Notification
+content contains the safe display name and aggregate resource value; it is never sent to a Watchio
+server because no such server exists.
 
 ## Process control
 

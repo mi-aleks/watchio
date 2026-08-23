@@ -8,6 +8,14 @@ Watchio is a menu bar accessory (`LSUIElement`). Look for `w:` in the menu bar. 
 
 Open the menu bar app and wait for a scan. Widgets read snapshots and do not run the collector. WidgetKit may delay refreshes even after Watchio requests one.
 
+## Resource alert or notification does not appear
+
+- Keep the menu bar collector running for at least three scans; the widget extension does not sample processes itself.
+- Energy alerts only apply while macOS reports that the Mac is drawing from its battery.
+- Check Settings → Widget for the memory/CPU thresholds and notification toggle.
+- If macOS permission was denied or later revoked, re-enable Watchio in System Settings → Notifications.
+- WidgetKit may delay rendering a changed snapshot; the menu bar Health view is the freshest source.
+
 ## A known service is missing
 
 1. Confirm it has been stable for at least three seconds.

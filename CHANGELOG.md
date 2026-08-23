@@ -14,6 +14,9 @@ All notable changes follow [Keep a Changelog](https://keepachangelog.com/en/1.1.
 - Added an explicitly confirmed Stop tree action for local services and AI activities, with same-user
   identity checks, descendant stabilization, graceful termination, verified force-kill fallback,
   survivor reporting, and deterministic PID-reuse safety tests.
+- Added sustained per-service and AI-process-tree memory alerts plus on-battery CPU energy alerts,
+  subtle widget/Health indicators, configurable thresholds, hysteresis, and opt-in quiet local
+  notifications with per-alert cooldowns and deep links.
 
 ### Changed
 

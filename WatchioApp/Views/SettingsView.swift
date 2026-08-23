@@ -223,13 +223,77 @@ struct SettingsView: View {
 
   private var widget: some View {
     Form {
-      LabeledContent("Families", value: "Small, Medium, Large")
-      LabeledContent("Configuration", value: "Services / AI / Ports / Health")
-      LabeledContent("Freshness") { Text("Offline after 30 seconds").foregroundStyle(.secondary) }
-      Text(
-        "macOS controls widget refresh timing. Watchio requests refreshes for material changes and a throttled freshness heartbeat."
-      )
-      .font(.caption).foregroundStyle(.secondary)
+      Section("Widget") {
+        LabeledContent("Families", value: "Small, Medium, Large")
+        LabeledContent("Configuration", value: "Services / AI / Ports / Health")
+        LabeledContent("Freshness") { Text("Offline after 30 seconds").foregroundStyle(.secondary) }
+        Text(
+          "macOS controls widget refresh timing. Watchio requests refreshes for material changes and a throttled freshness heartbeat."
+        )
+        .font(.caption).foregroundStyle(.secondary)
+      }
+
+      Section("Resource alerts") {
+        Toggle(
+          "Show subtle alerts in Watchio and its widget",
+          isOn: Binding(
+            get: { model.preferences.resourceAlertsEnabled },
+            set: {
+              model.preferences.resourceAlertsEnabled = $0
+              model.savePreferences()
+            }
+          )
+        )
+        .accessibilityIdentifier("resource-alerts-enabled")
+        Toggle(
+          "Send quiet macOS notifications",
+          isOn: Binding(
+            get: { model.preferences.systemNotificationsEnabled },
+            set: { enabled in model.setSystemNotificationsEnabled(enabled) }
+          )
+        )
+        .disabled(!model.preferences.resourceAlertsEnabled)
+        .accessibilityIdentifier("resource-notifications-enabled")
+        Picker(
+          "Memory threshold",
+          selection: Binding(
+            get: { model.preferences.memoryAlertThresholdBytes },
+            set: {
+              model.preferences.memoryAlertThresholdBytes = $0
+              model.savePreferences()
+            }
+          )
+        ) {
+          Text("512 MB").tag(UInt64(512 * 1_024 * 1_024))
+          Text("1 GB").tag(UInt64(1_024 * 1_024 * 1_024))
+          Text("2 GB").tag(UInt64(2 * 1_024 * 1_024 * 1_024))
+          Text("4 GB").tag(UInt64(4 * 1_024 * 1_024 * 1_024))
+        }
+        .disabled(!model.preferences.resourceAlertsEnabled)
+        .accessibilityIdentifier("memory-alert-threshold")
+        Picker(
+          "Battery CPU threshold",
+          selection: Binding(
+            get: { model.preferences.energyAlertCPUThresholdPercent },
+            set: {
+              model.preferences.energyAlertCPUThresholdPercent = $0
+              model.savePreferences()
+            }
+          )
+        ) {
+          Text("40%").tag(40.0)
+          Text("60%").tag(60.0)
+          Text("80%").tag(80.0)
+          Text("100%").tag(100.0)
+        }
+        .disabled(!model.preferences.resourceAlertsEnabled)
+        .accessibilityIdentifier("energy-alert-threshold")
+        Text(
+          "An alert needs three consecutive scans and clears with hysteresis. Battery alerts use sustained process-tree CPU only while macOS reports battery power; they are an energy proxy, not a battery percentage. Notifications have no sound and repeat at most once per hour per alert."
+        )
+        .font(.caption)
+        .foregroundStyle(.secondary)
+      }
     }
     .formStyle(.grouped)
     .padding()

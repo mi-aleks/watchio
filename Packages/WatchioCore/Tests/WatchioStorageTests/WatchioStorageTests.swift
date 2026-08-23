@@ -22,6 +22,10 @@ final class WatchioStorageTests: XCTestCase {
     XCTAssertEqual(snapshot.aiActivities.map(\.id), DemoData.snapshot.aiActivities.map(\.id))
     XCTAssertEqual(snapshot.aiActivities.map(\.tool), DemoData.snapshot.aiActivities.map(\.tool))
     XCTAssertEqual(snapshot.aiActivities.map(\.host), DemoData.snapshot.aiActivities.map(\.host))
+    XCTAssertEqual(snapshot.resourceAlerts.map(\.id), DemoData.snapshot.resourceAlerts.map(\.id))
+    XCTAssertEqual(
+      snapshot.resourceAlerts.map(\.memoryBytes),
+      DemoData.snapshot.resourceAlerts.map(\.memoryBytes))
     XCTAssertEqual(snapshot.collectorState, .active)
     XCTAssertEqual(
       try FileManager.default.contentsOfDirectory(atPath: directory.path),
@@ -109,5 +113,9 @@ final class WatchioStorageTests: XCTestCase {
     XCTAssertEqual(preferences.ignoreRules, [])
     XCTAssertTrue(preferences.showProjectPaths)
     XCTAssertTrue(preferences.observeAIActivity)
+    XCTAssertTrue(preferences.resourceAlertsEnabled)
+    XCTAssertFalse(preferences.systemNotificationsEnabled)
+    XCTAssertEqual(preferences.memoryAlertThresholdBytes, 1_073_741_824)
+    XCTAssertEqual(preferences.energyAlertCPUThresholdPercent, 80)
   }
 }

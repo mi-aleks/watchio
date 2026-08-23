@@ -190,6 +190,12 @@ struct MenuBarContentView: View {
   private var health: some View {
     ScrollView {
       LazyVStack(spacing: 6) {
+        ForEach(model.snapshot.resourceAlerts) { alert in
+          ResourceAlertHealthRow(alert: alert)
+        }
+        if !model.snapshot.resourceAlerts.isEmpty, !model.snapshot.sourceHealth.isEmpty {
+          Divider().overlay(Color.white.opacity(0.08)).padding(.vertical, 3)
+        }
         ForEach(model.snapshot.sourceHealth) { source in
           HStack(spacing: 10) {
             Image(
@@ -257,6 +263,47 @@ struct MenuBarContentView: View {
     .font(.system(size: 11, weight: .medium))
     .foregroundStyle(Color.white.opacity(0.78))
     .padding(13)
+  }
+}
+
+private struct ResourceAlertHealthRow: View {
+  let alert: ResourceAlert
+
+  var body: some View {
+    Link(destination: deepLink) {
+      HStack(spacing: 10) {
+        Image(systemName: alert.kind == .memory ? "memorychip.fill" : "bolt.fill")
+          .font(.system(size: 15, weight: .semibold))
+          .foregroundStyle(.orange)
+        VStack(alignment: .leading, spacing: 2) {
+          Text(alert.subjectName).font(.system(size: 12, weight: .semibold)).lineLimit(1)
+          Text(alert.kind.displayName).font(.caption2).foregroundStyle(WatchioPalette.secondaryText)
+        }
+        Spacer()
+        Text(value)
+          .font(.system(size: 10, weight: .semibold, design: .monospaced))
+          .foregroundStyle(.orange)
+      }
+      .padding(11)
+      .background(Color.orange.opacity(0.065), in: RoundedRectangle(cornerRadius: 12))
+      .overlay {
+        RoundedRectangle(cornerRadius: 12).stroke(Color.orange.opacity(0.32), lineWidth: 1)
+      }
+    }
+    .buttonStyle(.plain)
+    .accessibilityIdentifier("resource-alert-\(alert.id)")
+  }
+
+  private var value: String {
+    switch alert.kind {
+    case .memory: WatchioFormat.bytes(alert.memoryBytes)
+    case .energy: WatchioFormat.cpu(alert.cpuPercent ?? 0)
+    }
+  }
+
+  private var deepLink: URL {
+    let host = alert.subjectKind == .aiActivity ? "ai" : "service"
+    return URL(string: "watchio://\(host)/\(alert.subjectID)")!
   }
 }
 

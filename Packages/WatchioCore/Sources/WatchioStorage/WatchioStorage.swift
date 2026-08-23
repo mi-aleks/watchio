@@ -14,9 +14,9 @@ public protocol SnapshotStoring: Sendable {
 }
 
 public enum WatchioSharedContainer {
-  public static let snapshotFilename = "watchio-snapshot-v3.json"
+  public static let snapshotFilename = "watchio-snapshot-v4.json"
   public static let legacySnapshotFilenames = [
-    "watchio-snapshot-v2.json", "watchio-snapshot-v1.json",
+    "watchio-snapshot-v3.json", "watchio-snapshot-v2.json", "watchio-snapshot-v1.json",
   ]
 
   public static func groupIdentifier(bundle: Bundle = .main) -> String? {

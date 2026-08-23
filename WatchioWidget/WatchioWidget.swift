@@ -165,6 +165,22 @@ struct WatchioWidgetView: View {
       || entry.snapshot.collectorState == .offline
   }
 
+  private var visibleResourceAlerts: [ResourceAlert] {
+    let serviceIDs = Set(services.map(\.id))
+    let aiIDs = Set(aiActivities.map(\.id))
+    return entry.snapshot.resourceAlerts.filter { alert in
+      switch entry.configuration.viewMode {
+      case .services, .ports:
+        alert.subjectKind == .service && serviceIDs.contains(alert.subjectID)
+      case .ai:
+        alert.subjectKind == .aiActivity && aiIDs.contains(alert.subjectID)
+      case .health:
+        (alert.subjectKind == .service && serviceIDs.contains(alert.subjectID))
+          || (alert.subjectKind == .aiActivity && aiIDs.contains(alert.subjectID))
+      }
+    }
+  }
+
   @ViewBuilder private var content: some View {
     switch entry.configuration.viewMode {
     case .services:
@@ -197,7 +213,9 @@ struct WatchioWidgetView: View {
               colors: [Color.purple.opacity(0.18), .clear], center: .center, startRadius: 0,
               endRadius: 42)
           )
-        Circle().stroke(Color.purple.opacity(0.25), lineWidth: 1)
+        Circle().stroke(
+          visibleResourceAlerts.isEmpty ? Color.purple.opacity(0.25) : Color.orange.opacity(0.65),
+          lineWidth: 1)
         VStack(spacing: 1) {
           Text(aiActivities.count, format: .number)
             .font(.system(size: 28, weight: .medium, design: .monospaced))
@@ -210,9 +228,14 @@ struct WatchioWidgetView: View {
       }
       .frame(width: 76, height: 76)
       Spacer()
-      Text(aiActivities.isEmpty ? "No AI activity" : aiProjectSummary)
-        .font(.system(size: 11, weight: .semibold))
-        .lineLimit(1)
+      Text(
+        visibleResourceAlerts.isEmpty
+          ? (aiActivities.isEmpty ? "No AI activity" : aiProjectSummary)
+          : resourceAlertSummary
+      )
+      .font(.system(size: 11, weight: .semibold))
+      .foregroundStyle(visibleResourceAlerts.isEmpty ? .white : .orange)
+      .lineLimit(1)
       HStack(spacing: 5) {
         ForEach(Array(aiActivities.prefix(3))) { activity in
           AIToolGlyph(tool: activity.tool, size: 20)
@@ -236,7 +259,10 @@ struct WatchioWidgetView: View {
               endRadius: 48
             )
           )
-        Circle().stroke(WatchioPalette.accent.opacity(0.22), lineWidth: 1)
+        Circle().stroke(
+          visibleResourceAlerts.isEmpty
+            ? WatchioPalette.accent.opacity(0.22) : Color.orange.opacity(0.65),
+          lineWidth: 1)
         Circle().stroke(WatchioPalette.accent.opacity(0.04), lineWidth: 7)
         VStack(spacing: 1) {
           Text(services.count, format: .number)
@@ -251,8 +277,13 @@ struct WatchioWidgetView: View {
       }
       .frame(width: 76, height: 76)
       Spacer()
-      Text(services.isEmpty ? "No services detected" : "Systems nominal")
-        .font(.system(size: 12, weight: .semibold))
+      Text(
+        visibleResourceAlerts.isEmpty
+          ? (services.isEmpty ? "No services detected" : "Systems nominal")
+          : resourceAlertSummary
+      )
+      .font(.system(size: 12, weight: .semibold))
+      .foregroundStyle(visibleResourceAlerts.isEmpty ? .white : .orange)
       HStack(spacing: 7) {
         ForEach(Array(Set(services.flatMap(\.ports).map(\.port))).sorted().prefix(3), id: \.self) {
           port in
@@ -269,7 +300,9 @@ struct WatchioWidgetView: View {
     VStack(alignment: .leading, spacing: family == .systemLarge ? 7 : 4) {
       widgetHeader
       ForEach(Array(services.prefix(limit))) { service in
-        WidgetServiceRow(service: service, expanded: family == .systemLarge)
+        WidgetServiceRow(
+          service: service, expanded: family == .systemLarge,
+          alert: alert(subjectKind: .service, subjectID: service.id))
       }
       if services.isEmpty {
         Text("No services detected").font(.caption).foregroundStyle(WatchioPalette.secondaryText)
@@ -283,7 +316,9 @@ struct WatchioWidgetView: View {
     VStack(alignment: .leading, spacing: family == .systemLarge ? 7 : 4) {
       widgetHeader
       ForEach(Array(aiActivities.prefix(limit))) { activity in
-        WidgetAIActivityRow(activity: activity, expanded: family == .systemLarge)
+        WidgetAIActivityRow(
+          activity: activity, expanded: family == .systemLarge,
+          alert: alert(subjectKind: .aiActivity, subjectID: activity.id))
       }
       if aiActivities.isEmpty {
         Text("No AI activity").font(.caption).foregroundStyle(WatchioPalette.secondaryText)
@@ -327,7 +362,13 @@ struct WatchioWidgetView: View {
   private var healthView: some View {
     VStack(alignment: .leading, spacing: family == .systemLarge ? 8 : 5) {
       widgetHeader
-      ForEach(entry.snapshot.sourceHealth.prefix(family == .systemSmall ? 3 : 4)) { source in
+      ForEach(visibleResourceAlerts.prefix(family == .systemSmall ? 1 : 2)) { alert in
+        WidgetResourceAlertRow(alert: alert, compact: family == .systemSmall)
+      }
+      ForEach(
+        entry.snapshot.sourceHealth.prefix(
+          family == .systemSmall ? (visibleResourceAlerts.isEmpty ? 3 : 2) : 4)
+      ) { source in
         HStack(spacing: 8) {
           Image(
             systemName: source.state == .available
@@ -362,6 +403,12 @@ struct WatchioWidgetView: View {
         }
       }
       Spacer()
+      if !visibleResourceAlerts.isEmpty {
+        Label("\(visibleResourceAlerts.count)", systemImage: "exclamationmark.triangle.fill")
+          .font(.system(size: 8.5, weight: .bold, design: .rounded))
+          .foregroundStyle(.orange)
+          .accessibilityLabel(resourceAlertSummary)
+      }
       Text(entry.snapshot.generatedAt, style: .timer)
         .font(.system(size: 8.5, design: .monospaced))
         .foregroundStyle(WatchioPalette.secondaryText)
@@ -382,6 +429,19 @@ struct WatchioWidgetView: View {
 
   private var aiProjectSummary: String {
     aiProjectCount == 1 ? "1 project" : "\(aiProjectCount) projects"
+  }
+
+  private var resourceAlertSummary: String {
+    visibleResourceAlerts.count == 1
+      ? "1 resource alert" : "\(visibleResourceAlerts.count) resource alerts"
+  }
+
+  private func alert(
+    subjectKind: ResourceAlertSubjectKind, subjectID: String
+  ) -> ResourceAlert? {
+    entry.snapshot.resourceAlerts.first {
+      $0.subjectKind == subjectKind && $0.subjectID == subjectID
+    }
   }
 
   private var aggregateFooter: some View {
@@ -450,6 +510,7 @@ struct WatchioWidgetView: View {
 private struct WidgetServiceRow: View {
   let service: DetectedService
   let expanded: Bool
+  let alert: ResourceAlert?
 
   var body: some View {
     Link(destination: URL(string: "watchio://service/\(service.id)")!) {
@@ -474,6 +535,9 @@ private struct WidgetServiceRow: View {
             .lineLimit(1)
         }
         Spacer()
+        if let alert {
+          ResourceAlertGlyph(alert: alert)
+        }
         if let port = service.ports.first {
           Text(port.displayValue)
             .font(.system(size: expanded ? 10 : 9, weight: .semibold, design: .monospaced))
@@ -499,7 +563,8 @@ private struct WidgetServiceRow: View {
       .background(WatchioPalette.card, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
       .overlay {
         RoundedRectangle(cornerRadius: 10, style: .continuous)
-          .stroke(WatchioPalette.cardBorder, lineWidth: 1)
+          .stroke(
+            alert == nil ? WatchioPalette.cardBorder : Color.orange.opacity(0.5), lineWidth: 1)
       }
     }
     .buttonStyle(.plain)
@@ -515,6 +580,7 @@ private struct WidgetServiceRow: View {
 private struct WidgetAIActivityRow: View {
   let activity: DetectedAIActivity
   let expanded: Bool
+  let alert: ResourceAlert?
 
   var body: some View {
     Link(destination: URL(string: "watchio://ai/\(activity.id)")!) {
@@ -535,6 +601,9 @@ private struct WidgetAIActivityRow: View {
             .lineLimit(1)
         }
         Spacer()
+        if let alert {
+          ResourceAlertGlyph(alert: alert)
+        }
         VStack(alignment: .trailing, spacing: 2) {
           HStack(spacing: 6) {
             Text(activity.host.displayName)
@@ -555,7 +624,8 @@ private struct WidgetAIActivityRow: View {
       .background(WatchioPalette.card, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
       .overlay {
         RoundedRectangle(cornerRadius: 10, style: .continuous)
-          .stroke(WatchioPalette.cardBorder, lineWidth: 1)
+          .stroke(
+            alert == nil ? WatchioPalette.cardBorder : Color.orange.opacity(0.5), lineWidth: 1)
       }
     }
     .buttonStyle(.plain)
@@ -575,6 +645,60 @@ private struct WidgetAIActivityRow: View {
     let mebibytes = Double(bytes) / 1_048_576
     if mebibytes >= 1_024 { return String(format: "%.1f GB", mebibytes / 1_024) }
     return "\(Int(mebibytes.rounded())) MB"
+  }
+}
+
+private struct ResourceAlertGlyph: View {
+  let alert: ResourceAlert
+
+  var body: some View {
+    Image(systemName: alert.kind == .memory ? "memorychip.fill" : "bolt.fill")
+      .font(.system(size: 8.5, weight: .semibold))
+      .foregroundStyle(.orange)
+      .accessibilityLabel(alert.kind.displayName)
+  }
+}
+
+private struct WidgetResourceAlertRow: View {
+  let alert: ResourceAlert
+  let compact: Bool
+
+  var body: some View {
+    HStack(spacing: 8) {
+      ResourceAlertGlyph(alert: alert)
+      VStack(alignment: .leading, spacing: 1) {
+        Text(alert.subjectName)
+          .font(.system(size: 10, weight: .semibold))
+          .lineLimit(1)
+        if !compact {
+          Text(alert.kind.displayName)
+            .font(.system(size: 8))
+            .foregroundStyle(WatchioPalette.secondaryText)
+        }
+      }
+      Spacer()
+      Text(value)
+        .font(.system(size: 8.5, weight: .semibold, design: .monospaced))
+        .foregroundStyle(.orange)
+    }
+    .padding(.horizontal, 8)
+    .padding(.vertical, compact ? 5 : 7)
+    .background(Color.orange.opacity(0.065), in: RoundedRectangle(cornerRadius: 10))
+    .overlay {
+      RoundedRectangle(cornerRadius: 10).stroke(Color.orange.opacity(0.32), lineWidth: 1)
+    }
+    .accessibilityElement(children: .combine)
+  }
+
+  private var value: String {
+    switch alert.kind {
+    case .memory:
+      let mebibytes = Double(alert.memoryBytes ?? 0) / 1_048_576
+      return mebibytes >= 1_024
+        ? String(format: "%.1f GB", mebibytes / 1_024) : "\(Int(mebibytes.rounded())) MB"
+    case .energy:
+      return String(format: "%.0f%% CPU", alert.cpuPercent ?? 0)
+    }
   }
 }
 
