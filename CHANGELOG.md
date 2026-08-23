@@ -24,6 +24,8 @@ All notable changes follow [Keep a Changelog](https://keepachangelog.com/en/1.1.
 
 ### Changed
 
+- Replaced disruptive menu-bar warning symbols with a stable terminal mark and a subtle orange
+  attention dot.
 - Reworked the menu bar and every widget family around the darker, denser visual language from
   the original Watchio concept.
 - Replaced generic text badges with original runtime glyphs and database-aware Docker Compose
