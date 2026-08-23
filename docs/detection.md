@@ -16,6 +16,19 @@ All commands have fixed executable URLs, argument arrays, timeouts, cancellation
 
 Only records matching `getuid()` and at least three seconds old proceed. Watchio does not request arguments from `ps` and never requests process environments.
 
+The process inventory is collected once per scan and shared by service and AI classification.
+
+## Resource alerts
+
+Resource alerts run after service and AI grouping, so thresholds apply to the complete logical
+process tree rather than one arbitrary child PID. Memory uses aggregate RSS. Energy uses aggregate
+CPU as an explicitly labeled proxy and is evaluated only when IOKit reports battery power.
+
+Both kinds require three consecutive samples over the configured threshold. An active alert clears
+after two samples below 80% of its threshold. This hysteresis suppresses short compiler spikes and
+borderline oscillation. Unknown power-source state fails closed for energy alerts. No alert can stop,
+renice, suspend, or otherwise mutate a process.
+
 ## Project resolution
 
 Default roots are existing `~/Code`, `~/Developer`, and `~/Projects`. Users can add roots. Starting from a candidate CWD, the resolver walks upward only inside configured roots and stops at the first supported marker:
@@ -59,10 +72,42 @@ Every visible or Review result carries only the non-sensitive evidence labels re
 
 Compose rows use published host ports and suppress raw Docker backend processes. Containers without Compose labels remain hidden. Non-Unix-socket Docker contexts fail closed before container listing.
 
+## AI activity rules
+
+AI activity is a separate process-only classifier. It matches exact executable basenames so generic
+application helpers such as `Codex Renderer`, `code-mode-host`, and Cursor UI services do not
+become false positives.
+
+| Tool | Recognized executable names |
+|---|---|
+| Codex | `codex` |
+| Claude | `claude` |
+| Gemini CLI | `gemini` |
+| Aider | `aider`, `aider-chat` |
+| OpenCode | `opencode` |
+| Goose | `goose` |
+| GitHub Copilot CLI | `copilot`, `github-copilot` |
+| Cursor Agent | `cursor-agent` |
+
+The known executable contributes 45 points. A recognized installation path contributes 20; a
+resolved project, TTY, IDE host, or desktop host contributes 15 each; recognized AI ancestry
+contributes 10. Activities require 60 points and have no Review queue. The UI reports only the
+non-sensitive evidence used by the score.
+
+The classifier labels an activity as CLI, VS Code, desktop, background, or subagent. Descendant
+helper processes contribute CPU, RSS, process count, and uptime to their nearest recognized AI
+ancestor. The UI labels CPU and resident RAM as process-tree totals. A separately executable AI
+child can remain its own subagent row with independent totals.
+
+Watchio cannot safely infer a tool when macOS exposes only a generic `node` or `python` executable,
+because arguments are outside the collection contract. It also cannot enumerate logical agents,
+tasks, or conversations multiplexed inside one desktop process. Those cases remain hidden or
+appear as one host activity rather than weakening the privacy boundary.
+
 ## Grouping
 
 Candidates group by resolved project root plus process group (or PID when no useful process group exists). The representative is the highest-confidence candidate. All same-group processes contribute process count, CPU, RSS, earliest start, and listeners. This treats a runtime and its workers as one logical service without persisting raw arguments.
 
 ## Adding a detector
 
-Add a narrow runtime rule, positive fixtures, GUI/daemon false-positive fixtures, and grouping tests. Explain what public metadata creates confidence. A new detector may not require environment values, argument persistence, file-content crawling, outbound requests, elevated privileges, or an action that changes a process.
+Add a narrow runtime rule, positive fixtures, GUI/daemon false-positive fixtures, and grouping tests. Explain what public metadata creates confidence. A new detector may not require environment values, argument persistence, file-content crawling, outbound requests, or elevated privileges. Detection must never trigger process control; the separately confirmed stop contract is documented in [ADR-0002](adr/0002-safe-process-tree-control.md).

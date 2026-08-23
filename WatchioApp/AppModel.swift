@@ -1,6 +1,7 @@
 import Foundation
 import Observation
 import ServiceManagement
+@preconcurrency import UserNotifications
 import WatchioDetection
 import WatchioModels
 import WatchioStorage
@@ -11,6 +12,7 @@ import WidgetKit
 final class AppModel {
   enum Mode: String, CaseIterable, Identifiable {
     case services = "Services"
+    case ai = "AI"
     case ports = "Ports"
     case health = "Health"
     var id: Self { self }
@@ -21,15 +23,24 @@ final class AppModel {
   var preferences: DetectionPreferences
   var selectedMode: Mode = .services
   var selectedServiceID: String?
+  var selectedAIActivityID: String?
   var lastError: String?
+  var processControlNotice: String?
   var isScanning = false
+  private(set) var stoppingProcessID: Int32?
   private(set) var hasCompletedOnboarding: Bool
 
   private let engine: DetectionEngine
+  private let processTerminator: ProcessTreeTerminator
+  private let powerSourceProvider: any PowerSourceProviding
+  private let notificationController: ResourceNotificationController
   private let snapshotStore: any SnapshotStoring
   private let preferencesStore: DetectionPreferencesStore
   private let appDefaults: UserDefaults
+  private let demoMode: Bool
   private var scanTask: Task<Void, Never>?
+  private var alertEvaluator = ResourceAlertEvaluator()
+  private var lastResourceNotificationAt: [String: Date] = [:]
   private var lastWidgetSignature = ""
   private var lastWidgetReloadAt: Date = .distantPast
 
@@ -37,13 +48,20 @@ final class AppModel {
     demoMode: Bool = ProcessInfo.processInfo.arguments.contains("--demo-data"),
     showOnboarding: Bool = ProcessInfo.processInfo.arguments.contains("--show-onboarding"),
     engine: DetectionEngine = DetectionEngine(),
+    processTerminator: ProcessTreeTerminator = ProcessTreeTerminator(),
+    powerSourceProvider: any PowerSourceProviding = SystemPowerSourceProvider(),
+    notificationController: ResourceNotificationController = ResourceNotificationController(),
     snapshotStore: any SnapshotStoring = JSONSnapshotStore(),
     preferencesStore: DetectionPreferencesStore? = nil,
     appDefaults: UserDefaults = .standard
   ) {
     self.engine = engine
+    self.processTerminator = processTerminator
+    self.powerSourceProvider = powerSourceProvider
+    self.notificationController = notificationController
     self.snapshotStore = snapshotStore
     self.appDefaults = appDefaults
+    self.demoMode = demoMode
     let store = preferencesStore ?? Self.makePreferencesStore()
     self.preferencesStore = store
     preferences = store.load()
@@ -57,9 +75,12 @@ final class AppModel {
     }
   }
 
-  var menuBarTitle: String { "w:\(snapshot.services.count)" }
+  var menuBarTitle: String { "w:\(snapshot.services.count + snapshot.aiActivities.count)" }
   var selectedService: DetectedService? {
     snapshot.services.first { $0.id == selectedServiceID }
+  }
+  var selectedAIActivity: DetectedAIActivity? {
+    snapshot.aiActivities.first { $0.id == selectedAIActivityID }
   }
 
   var launchAtLogin: Bool {
@@ -100,15 +121,24 @@ final class AppModel {
 
     let result = await engine.scan(preferences: preferences)
     let degraded = result.sourceHealth.contains { $0.state != .available }
+    let previousAlertIDs = Set(snapshot.resourceAlerts.map(\.id))
+    let resourceAlerts = alertEvaluator.evaluate(
+      services: result.services, aiActivities: result.aiActivities, preferences: preferences,
+      powerSource: powerSourceProvider.currentPowerSource())
     let next = WatchioSnapshot(
       collectorState: degraded ? .degraded : .active,
       services: result.services,
+      aiActivities: result.aiActivities,
       reviewSuggestions: result.reviewSuggestions,
-      sourceHealth: result.sourceHealth
+      sourceHealth: result.sourceHealth,
+      resourceAlerts: resourceAlerts
     )
     snapshot = next
     selectedServiceID = selectedServiceID.flatMap { id in
       next.services.contains { $0.id == id } ? id : nil
+    }
+    selectedAIActivityID = selectedAIActivityID.flatMap { id in
+      next.aiActivities.contains { $0.id == id } ? id : nil
     }
     trend.append(
       ResourceSample(
@@ -132,6 +162,8 @@ final class AppModel {
       lastWidgetReloadAt = next.generatedAt
       WidgetCenter.shared.reloadTimelines(ofKind: "WatchioWidget")
     }
+    await deliverResourceNotifications(
+      resourceAlerts.filter { !previousAlertIDs.contains($0.id) }, at: next.generatedAt)
   }
 
   func savePreferences() {
@@ -142,6 +174,54 @@ final class AppModel {
     } catch {
       lastError = "Detection preferences could not be saved."
     }
+  }
+
+  func setSystemNotificationsEnabled(_ enabled: Bool) {
+    guard enabled else {
+      preferences.systemNotificationsEnabled = false
+      savePreferences()
+      return
+    }
+    Task {
+      do {
+        let granted = try await notificationController.requestAuthorization()
+        preferences.systemNotificationsEnabled = granted
+        if granted {
+          savePreferences()
+          await deliverResourceNotifications(snapshot.resourceAlerts, at: .now)
+        } else {
+          try preferencesStore.save(preferences)
+          lastError =
+            "Notifications are disabled for Watchio. Enable them in System Settings → Notifications."
+        }
+      } catch {
+        preferences.systemNotificationsEnabled = false
+        try? preferencesStore.save(preferences)
+        lastError = "Watchio could not request notification permission."
+      }
+    }
+  }
+
+  func isStopping(processID: Int32) -> Bool {
+    stoppingProcessID == processID
+  }
+
+  func stopProcessTree(for service: DetectedService) async {
+    guard let processID = service.representativePID,
+      let startedAt = service.representativeStartedAt
+    else { return }
+    await stopProcessTree(
+      target: ProcessTerminationTarget(
+        representativePID: processID, representativeStartedAt: startedAt),
+      displayName: service.name)
+  }
+
+  func stopProcessTree(for activity: DetectedAIActivity) async {
+    await stopProcessTree(
+      target: ProcessTerminationTarget(
+        representativePID: activity.representativePID,
+        representativeStartedAt: activity.representativeStartedAt),
+      displayName: activity.tool.displayName)
   }
 
   func addProjectRoot(_ path: String) {
@@ -192,6 +272,9 @@ final class AppModel {
   func handleDeepLink(_ url: URL) {
     guard url.scheme?.lowercased() == "watchio" else { return }
     switch url.host?.lowercased() {
+    case "ai":
+      selectedMode = .ai
+      selectedAIActivityID = url.pathComponents.dropFirst().first
     case "ports": selectedMode = .ports
     case "health": selectedMode = .health
     case "service":
@@ -205,10 +288,17 @@ final class AppModel {
     let services = snapshot.services.map { service in
       "\(service.id):\(service.ports.map(\.id).joined(separator: ","))"
     }.joined(separator: "|")
+    let aiActivities = snapshot.aiActivities.map { activity in
+      "\(activity.id):\(activity.processCount)"
+    }.joined(separator: "|")
     let cpuBucket = Int(snapshot.services.compactMap(\.cpuPercent).reduce(0, +) / 5)
     let memoryBucket =
       snapshot.services.compactMap(\.memoryBytes).reduce(0, +) / (64 * 1_024 * 1_024)
-    return "\(snapshot.collectorState.rawValue)|\(services)|cpu:\(cpuBucket)|mem:\(memoryBucket)"
+    let aiCPU = Int(snapshot.aiActivities.map(\.cpuPercent).reduce(0, +) / 5)
+    let aiMemory = snapshot.aiActivities.map(\.memoryBytes).reduce(0, +) / (64 * 1_024 * 1_024)
+    let alerts = snapshot.resourceAlerts.map(\.id).joined(separator: ",")
+    return
+      "\(snapshot.collectorState.rawValue)|\(services)|ai:\(aiActivities)|cpu:\(cpuBucket)|mem:\(memoryBucket)|aicpu:\(aiCPU)|aimem:\(aiMemory)|alerts:\(alerts)"
   }
 
   private func normalizedRule(_ rawRule: String) -> String? {
@@ -216,7 +306,63 @@ final class AppModel {
     return rule.isEmpty ? nil : rule
   }
 
+  private func stopProcessTree(target: ProcessTerminationTarget, displayName: String) async {
+    guard stoppingProcessID == nil else { return }
+    if demoMode {
+      processControlNotice = "Demo mode never sends process signals."
+      return
+    }
+
+    stoppingProcessID = target.representativePID
+    defer { stoppingProcessID = nil }
+    do {
+      let result = try await processTerminator.terminate(target)
+      if result.survivingProcessCount > 0 {
+        processControlNotice =
+          "Watchio stopped \(result.terminatedProcessCount) verified processes in the \(displayName) tree, but \(result.survivingProcessCount) still appear alive. Unverified PIDs were not sent SIGTERM or SIGKILL."
+      } else if result.forceKilledProcessCount > 0 {
+        processControlNotice =
+          "Stopped \(result.terminatedProcessCount) verified processes in the \(displayName) tree. \(result.forceKilledProcessCount) required SIGKILL after the grace period."
+      } else {
+        processControlNotice =
+          "Stopped \(result.terminatedProcessCount) verified processes in the \(displayName) tree gracefully."
+      }
+    } catch {
+      processControlNotice =
+        (error as? LocalizedError)?.errorDescription
+        ?? "Watchio could not safely stop the selected process tree."
+    }
+
+    try? await Task.sleep(for: .milliseconds(250))
+    await scanNow()
+  }
+
+  private func deliverResourceNotifications(_ alerts: [ResourceAlert], at date: Date) async {
+    guard preferences.systemNotificationsEnabled, !demoMode else { return }
+    for alert in alerts {
+      if let previous = lastResourceNotificationAt[alert.id],
+        date.timeIntervalSince(previous) < Self.resourceNotificationCooldown
+      {
+        continue
+      }
+      do {
+        try await notificationController.deliver(alert)
+        lastResourceNotificationAt[alert.id] = date
+      } catch {
+        if error is ResourceNotificationError {
+          preferences.systemNotificationsEnabled = false
+          try? preferencesStore.save(preferences)
+          lastError =
+            "Notifications are disabled for Watchio. Enable them in System Settings → Notifications."
+        } else {
+          lastError = "A Watchio resource notification could not be delivered."
+        }
+      }
+    }
+  }
+
   private static let onboardingKey = "watchio.onboarding-complete.v1"
+  private static let resourceNotificationCooldown: TimeInterval = 60 * 60
 
   private static func makePreferencesStore() -> DetectionPreferencesStore {
     if let identifier = WatchioSharedContainer.groupIdentifier(),
@@ -226,6 +372,53 @@ final class AppModel {
     }
     return DetectionPreferencesStore()
   }
+}
+
+actor ResourceNotificationController {
+  private let center = UNUserNotificationCenter.current()
+
+  func requestAuthorization() async throws -> Bool {
+    try await center.requestAuthorization(options: [.alert])
+  }
+
+  func deliver(_ alert: ResourceAlert) async throws {
+    let settings = await center.notificationSettings()
+    guard
+      settings.authorizationStatus == .authorized
+        || settings.authorizationStatus == .provisional
+    else { throw ResourceNotificationError.notAuthorized }
+
+    let content = UNMutableNotificationContent()
+    content.title = alert.kind.displayName
+    content.body = notificationBody(for: alert)
+    content.interruptionLevel = .passive
+    content.threadIdentifier = "watchio-resource-alerts"
+    content.userInfo = ["watchioURL": deepLink(for: alert).absoluteString]
+    try await center.add(
+      UNNotificationRequest(
+        identifier: "watchio-resource-\(alert.id)", content: content, trigger: nil))
+  }
+
+  private func notificationBody(for alert: ResourceAlert) -> String {
+    switch alert.kind {
+    case .memory:
+      let value = ByteCountFormatter.string(
+        fromByteCount: Int64(alert.memoryBytes ?? 0), countStyle: .memory)
+      return "\(alert.subjectName) is using \(value) of resident memory."
+    case .energy:
+      return
+        "\(alert.subjectName) is sustaining \(String(format: "%.0f%%", alert.cpuPercent ?? 0)) CPU while on battery."
+    }
+  }
+
+  private func deepLink(for alert: ResourceAlert) -> URL {
+    let host = alert.subjectKind == .aiActivity ? "ai" : "service"
+    return URL(string: "watchio://\(host)/\(alert.subjectID)")!
+  }
+}
+
+private enum ResourceNotificationError: Error {
+  case notAuthorized
 }
 
 @MainActor

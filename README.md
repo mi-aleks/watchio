@@ -4,7 +4,7 @@
 
 <h1 align="center">Watchio</h1>
 
-<p align="center">A private, native macOS view of the development services already running on your machine.</p>
+<p align="center">A private, native macOS view of—and safe stop control for—the development services and AI tools already running on your machine.</p>
 
 <p align="center">
   <a href="https://github.com/mi-aleks/watchio/actions/workflows/ci.yml"><img alt="CI status" src="https://github.com/mi-aleks/watchio/actions/workflows/ci.yml/badge.svg"></a>
@@ -15,16 +15,20 @@
 
 ![Watchio native menu bar app showing four deterministic demo development services](docs/assets/watchio-hero.png)
 
-Watchio answers the small but persistent question: **what did I leave running?** It detects supported development runtimes, their project, process tree, resource use, and listening ports—then makes the result glanceable from the menu bar and Widget Center.
+Watchio answers the small but persistent question: **what did I leave running?** It detects supported development runtimes and local AI tools, their project, process tree, resource use, and listening ports—then makes the result glanceable from the menu bar and Widget Center.
 
 Watchio `0.1.0-alpha.1` is source-only. It is not signed, notarized, distributed as a DMG, or available through Homebrew yet.
 
 ## Why Watchio
 
 - Native SwiftUI menu bar app and Small, Medium, and Large widgets
+- Original runtime glyphs make Node.js, Go, Python, Bun, Deno, containers, and common Compose
+  databases recognizable at a glance
+- A dedicated AI activity view recognizes supported CLI, IDE, desktop, and child-agent processes
 - Automatic, explainable detection instead of a manually maintained service list
 - First-class Node.js, Bun, Deno, Go, Python, and Docker Compose support
-- Observe-only: Watchio cannot stop, restart, or otherwise change a process
+- Explicit local control: stop a selected, re-verified process tree after confirmation; never restart or act automatically
+- Sustained memory and on-battery energy alerts in the widget, with optional quiet local notifications
 - Fully local: no telemetry, accounts, network requests, root access, or stored history
 - Deliberately conservative: uncertain candidates go to Review instead of appearing silently
 
@@ -57,7 +61,7 @@ make check
 |---|---|---|
 | Node.js | `node`, project marker, listener, terminal ancestry | Includes child processes in the logical service |
 | Bun | `bun` / `bunx`, project marker or terminal ancestry | Workers do not need a port |
-| Deno | `deno`, project marker or listener | Observe-only |
+| Deno | `deno`, project marker or listener | Workers do not need a port |
 | Go | `go` or a `go-build` executable, project marker/listener | Compiled binaries without Go metadata need strong project evidence |
 | Python | `python*`, project marker or terminal ancestry | Virtualenv and toolchain paths add evidence |
 | Docker Compose | Compose labels from the active local Docker CLI context | Remote contexts and raw Docker backend processes are suppressed |
@@ -76,11 +80,72 @@ The confidence model is intentionally simple and documented:
 
 Scores of 60 or more appear automatically. Scores from 40–59 go to **Settings → Review**. Lower scores stay hidden. GUI executables, system daemons, Watchio itself, Docker's backend, and unexplained launchd children receive strong penalties. See [Detection](docs/detection.md) for the complete contract.
 
+## Local AI activity
+
+![Watchio AI activity view showing deterministic Codex, Claude, and Gemini demo processes](docs/assets/watchio-ai.png)
+
+The AI view reuses the same `ps` inventory and recognizes exact executable identities for Codex,
+Claude, Gemini CLI, Aider, OpenCode, Goose, GitHub Copilot CLI, and Cursor Agent. It labels where
+an activity is hosted—CLI, VS Code, desktop, background, or a child agent—and groups ordinary
+descendant processes under the nearest recognized AI process. Every AI row shows the current CPU
+percentage and resident RAM for that complete logical process tree; the expanded detail exposes
+the representative PID and included process count.
+
+AI detection has a separate, conservative score:
+
+| Evidence | Score |
+|---|---:|
+| Exact supported executable | +45 |
+| Recognized installation path | +20 |
+| Working directory resolves to a project | +15 |
+| Terminal, IDE, or desktop host | +15 |
+| Recognized AI-process ancestry | +10 |
+
+Activities need a score of 60 to appear. Detection is process-only: Watchio never reads prompts,
+conversation files, session history, task titles, raw arguments, or environment variables. A
+desktop app that multiplexes several logical agents inside one OS process appears as one activity;
+separate agent processes can appear independently. Script-based tools that expose only a generic
+`node` or `python` executable cannot be identified safely and remain hidden.
+
+## Safe process control
+
+Expand a service or AI activity and choose **Stop tree…** to stop its representative process and
+same-user descendants. Watchio always shows a destructive confirmation first. It does not expose
+bulk stop, automatic cleanup, restart, or a remote-control API. Docker Compose rows do not expose
+this action because their container lifecycle is not represented by a stable local PID.
+
+For a confirmed stop, Watchio:
+
+1. Re-resolves the selected PID and verifies UID, executable, and inferred start time.
+2. Refuses PID 1, another user's process, Watchio itself, or any ancestor that owns this Watchio instance.
+3. Temporarily freezes the root, discovers and freezes its descendants, and requires the tree to stabilize.
+4. Re-verifies every frozen identity, sends `SIGTERM` deepest-first, resumes the tree, and watches for new descendants for five seconds.
+5. Sends `SIGKILL` only to verified survivors, then reports any process that still appears alive.
+
+No shell, process-group broadcast, root privilege, or persisted command line is involved. The action
+is intentionally fail-closed: a changed PID, unstable tree, unavailable inventory, or permission
+failure stops the operation. An external supervisor outside the selected tree can still launch a new
+replacement process; Watchio never follows or terminates an unrelated ancestor to prevent that.
+
 ## Widgets are snapshots, not monitors
 
 WidgetKit controls refresh timing. Watchio writes one versioned snapshot atomically and asks WidgetKit to reload for material service/resource changes or a throttled freshness heartbeat. A widget shows freshness and moves to an offline state when its snapshot becomes stale. Keep the menu bar app running for collection; Watchio does not install a hidden LaunchAgent.
 
-Widget configuration supports Services, Ports, or Health, across all projects or a named project. Widget taps deep-link to `watchio://`.
+Widget configuration supports Services, AI Activity, Ports, or Health, across all projects or a named project. Widget taps deep-link to `watchio://`.
+
+## Resource alerts
+
+Watchio can mark sustained resource pressure with a small amber indicator in every widget family and
+an explanatory row in Health. The default memory threshold is 1 GB of aggregate resident memory for
+one detected service or AI process tree. An energy alert requires at least 80% aggregate CPU while
+macOS reports that the Mac is drawing from its battery. It is deliberately labeled **High energy
+use**: macOS does not provide Watchio a reliable, unprivileged per-process battery percentage.
+
+An alert needs three consecutive scans to activate and two clearly lower samples to recover, which
+suppresses build spikes and visual flicker. Settings → Widget lets you change both thresholds, hide
+resource alerts, or opt into quiet macOS notifications. Notifications have no sound, deep-link to
+the affected row, and repeat no more than once per hour for the same alert. Evaluation happens in
+the visible collector; the WidgetKit extension only renders the latest local snapshot.
 
 ## Privacy and security
 
@@ -89,11 +154,14 @@ Watchio is designed so useful output does not require sensitive input:
 - Process inventory is restricted to the current Unix UID.
 - Environment variables are never read into inventory, snapshots, or diagnostics.
 - Raw command arguments are never stored and never enter snapshots.
+- AI prompts, conversation files, session history, and task titles are never read.
 - Home paths are shortened to `~`; external paths are reduced to a display name.
 - Only the latest snapshot is retained. Resource trends remain bounded in memory.
+- Resource alerts store only a safe row identifier/name, aggregate value, threshold, kind, and time.
 - There are no application network APIs, accounts, analytics, or update checks.
 - Docker collection refuses non-local CLI contexts, so discovery cannot contact a remote engine.
 - Subprocesses use fixed executable URLs, explicit arguments, timeouts, cancellation, and output limits—never shell interpolation.
+- Process signals are sent only after an explicit confirmation and same-user identity verification; there are no background or automatic process actions.
 - The collector app is nonsandboxed because macOS process inspection requires it; the widget is sandboxed. Release builds enable Hardened Runtime.
 
 Read [PRIVACY.md](PRIVACY.md), [SECURITY.md](SECURITY.md), and the [threat-conscious architecture](docs/architecture.md) before extending collection.
@@ -102,18 +170,26 @@ Read [PRIVACY.md](PRIVACY.md), [SECURITY.md](SECURITY.md), and the [threat-consc
 
 ```mermaid
 flowchart LR
-  A[Visible menu bar app] --> E[DetectionEngine]
-  E --> P[/bin/ps]
-  E --> L[/usr/sbin/lsof]
-  E --> D[Active Docker CLI context]
-  E --> R[Project resolver]
-  E --> S[Confidence + grouping]
-  S --> M[Menu bar and Settings]
-  S --> J[Atomic versioned snapshot]
-  J --> W[Sandboxed WidgetKit extension]
+  A["Visible menu bar app"] --> E["DetectionEngine"]
+  E --> P["/bin/ps"]
+  E --> L["/usr/sbin/lsof"]
+  E --> D["Active Docker CLI context"]
+  E --> R["Project resolver"]
+  E --> S["Service confidence + grouping"]
+  E --> I["AI identity + ancestry"]
+  I --> M
+  S --> M["Menu bar and Settings"]
+  M --> C["Confirmed process-tree stop"]
+  C --> P
+  C --> K["POSIX process signals"]
+  S --> J["Atomic versioned snapshot"]
+  S --> A["Sustained resource alert evaluator"]
+  A --> J
+  A --> N["Optional quiet local notification"]
+  J --> W["Sandboxed WidgetKit extension"]
 ```
 
-The dependency-free local Swift package separates `WatchioModels`, `WatchioDetection`, and `WatchioStorage`. Protocol boundaries make every external inventory source fixture-testable. See [Architecture](docs/architecture.md) and [ADR-0001](docs/adr/0001-native-observe-only.md).
+The dependency-free local Swift package separates `WatchioModels`, `WatchioDetection`, and `WatchioStorage`. Protocol boundaries make inventory, resource-alert evaluation, and process signaling fixture-testable. See [Architecture](docs/architecture.md), [ADR-0001](docs/adr/0001-native-observe-only.md), [ADR-0002](docs/adr/0002-safe-process-tree-control.md), and [ADR-0003](docs/adr/0003-local-resource-alerts.md).
 
 ## Development
 
@@ -128,13 +204,21 @@ make check        # all required local checks
 
 Set `WATCHIO_RUN_INTEGRATION_TESTS=1` when running `swift test` to enable the real temporary-listener `ps`/`lsof` integration test. CI validates Xcode 16.2, Xcode 26.2, deterministic native UI flows, unsigned arm64 Release, coverage instrumentation, privacy invariants, formatting, and local documentation links.
 
+Set `WATCHIO_RUN_PROCESS_CONTROL_TESTS=1` only when you intentionally want to run the destructive
+integration test. It creates and stops its own disposable shell-and-sleep tree; it never selects an
+existing development process.
+
 ## Known limitations
 
 - Apple Silicon only; Intel is not a release target.
 - Automatic detection is heuristic. Review the confidence evidence when a service is missing or surprising.
 - macOS may delay WidgetKit refreshes. The menu bar view is the freshest source.
+- Energy alerts use sustained CPU as a proxy and only evaluate while macOS reports battery power; they are not a battery-percentage measurement.
 - `lsof` and Docker can be unavailable or degraded; Watchio reports source health instead of failing the whole scan.
 - Service names are inferred without storing command arguments, so two identical runtimes in one process group may be grouped together.
+- AI activity is process-level, not conversation-level; internal desktop sessions are intentionally opaque.
+- AI tools implemented as generic `node` or `python` processes may be hidden rather than guessed from arguments.
+- Stop tree is irreversible. It targets the selected local PID tree, not Docker containers or an external supervisor that may launch a replacement.
 - The alpha is source-only and uses your local development team. There is no automatic updater.
 
 ## Roadmap

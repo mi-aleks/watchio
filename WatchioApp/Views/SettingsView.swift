@@ -105,6 +105,28 @@ struct SettingsView: View {
           .padding(8)
         }
 
+        GroupBox("AI activity") {
+          VStack(alignment: .leading, spacing: 6) {
+            Toggle(
+              "Detect supported local AI tools",
+              isOn: Binding(
+                get: { model.preferences.observeAIActivity },
+                set: {
+                  model.preferences.observeAIActivity = $0
+                  model.savePreferences()
+                }
+              )
+            )
+            .accessibilityIdentifier("detect-ai-activity")
+            Text(
+              "Uses executable identity, CWD, TTY, and process ancestry. Prompts, command arguments, environment values, and conversation files are never read."
+            )
+            .font(.caption)
+            .foregroundStyle(.secondary)
+          }
+          .padding(8)
+        }
+
         GroupBox("Rules") {
           VStack(alignment: .leading, spacing: 12) {
             Text(
@@ -201,13 +223,77 @@ struct SettingsView: View {
 
   private var widget: some View {
     Form {
-      LabeledContent("Families", value: "Small, Medium, Large")
-      LabeledContent("Configuration", value: "Services / Ports / Health, all or one project")
-      LabeledContent("Freshness") { Text("Offline after 30 seconds").foregroundStyle(.secondary) }
-      Text(
-        "macOS controls widget refresh timing. Watchio requests refreshes for material changes and a throttled freshness heartbeat."
-      )
-      .font(.caption).foregroundStyle(.secondary)
+      Section("Widget") {
+        LabeledContent("Families", value: "Small, Medium, Large")
+        LabeledContent("Configuration", value: "Services / AI / Ports / Health")
+        LabeledContent("Freshness") { Text("Offline after 30 seconds").foregroundStyle(.secondary) }
+        Text(
+          "macOS controls widget refresh timing. Watchio requests refreshes for material changes and a throttled freshness heartbeat."
+        )
+        .font(.caption).foregroundStyle(.secondary)
+      }
+
+      Section("Resource alerts") {
+        Toggle(
+          "Show subtle alerts in Watchio and its widget",
+          isOn: Binding(
+            get: { model.preferences.resourceAlertsEnabled },
+            set: {
+              model.preferences.resourceAlertsEnabled = $0
+              model.savePreferences()
+            }
+          )
+        )
+        .accessibilityIdentifier("resource-alerts-enabled")
+        Toggle(
+          "Send quiet macOS notifications",
+          isOn: Binding(
+            get: { model.preferences.systemNotificationsEnabled },
+            set: { enabled in model.setSystemNotificationsEnabled(enabled) }
+          )
+        )
+        .disabled(!model.preferences.resourceAlertsEnabled)
+        .accessibilityIdentifier("resource-notifications-enabled")
+        Picker(
+          "Memory threshold",
+          selection: Binding(
+            get: { model.preferences.memoryAlertThresholdBytes },
+            set: {
+              model.preferences.memoryAlertThresholdBytes = $0
+              model.savePreferences()
+            }
+          )
+        ) {
+          Text("512 MB").tag(UInt64(512 * 1_024 * 1_024))
+          Text("1 GB").tag(UInt64(1_024 * 1_024 * 1_024))
+          Text("2 GB").tag(UInt64(2 * 1_024 * 1_024 * 1_024))
+          Text("4 GB").tag(UInt64(4 * 1_024 * 1_024 * 1_024))
+        }
+        .disabled(!model.preferences.resourceAlertsEnabled)
+        .accessibilityIdentifier("memory-alert-threshold")
+        Picker(
+          "Battery CPU threshold",
+          selection: Binding(
+            get: { model.preferences.energyAlertCPUThresholdPercent },
+            set: {
+              model.preferences.energyAlertCPUThresholdPercent = $0
+              model.savePreferences()
+            }
+          )
+        ) {
+          Text("40%").tag(40.0)
+          Text("60%").tag(60.0)
+          Text("80%").tag(80.0)
+          Text("100%").tag(100.0)
+        }
+        .disabled(!model.preferences.resourceAlertsEnabled)
+        .accessibilityIdentifier("energy-alert-threshold")
+        Text(
+          "An alert needs three consecutive scans and clears with hysteresis. Battery alerts use sustained process-tree CPU only while macOS reports battery power; they are an energy proxy, not a battery percentage. Notifications have no sound and repeat at most once per hour per alert."
+        )
+        .font(.caption)
+        .foregroundStyle(.secondary)
+      }
     }
     .formStyle(.grouped)
     .padding()
@@ -218,8 +304,10 @@ struct SettingsView: View {
       Label("Fully local", systemImage: "checkmark.shield.fill").font(.title2).foregroundStyle(
         .green)
       promise("No telemetry, accounts, analytics, or network requests")
-      promise("No root access, privilege prompts, or process-changing actions")
+      promise("No root access, privilege prompts, or automatic process actions")
+      promise("Stop tree requires confirmation and re-verifies same-user process identity")
       promise("No environment variables or command arguments collected")
+      promise("AI activity never reads prompts, conversation files, or session history")
       promise("Only the latest redacted snapshot is stored; no history")
       promise("Project paths inside your home directory are shortened to ~")
       Spacer()
@@ -236,7 +324,7 @@ struct SettingsView: View {
       Text("w:").font(.system(size: 58, weight: .black, design: .monospaced)).foregroundStyle(.tint)
       Text("Watchio").font(.title.bold())
       Text("0.1.0-alpha.1").foregroundStyle(.secondary)
-      Text("An open-source development service observer for macOS.")
+      Text("An open-source development process companion for macOS.")
       HStack {
         Link("GitHub", destination: URL(string: "https://github.com/mi-aleks/watchio")!)
         Link(

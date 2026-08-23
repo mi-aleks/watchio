@@ -5,11 +5,11 @@ import WatchioStorage
 import WidgetKit
 
 enum WidgetViewMode: String, AppEnum {
-  case services, ports, health
+  case services, ai, ports, health
 
   static let typeDisplayRepresentation = TypeDisplayRepresentation(name: "View")
   static let caseDisplayRepresentations: [Self: DisplayRepresentation] = [
-    .services: "Services", .ports: "Ports", .health: "Health",
+    .services: "Services", .ai: "AI activity", .ports: "Ports", .health: "Health",
   ]
 }
 
@@ -132,12 +132,11 @@ struct WatchioWidgetView: View {
         content
       }
     }
-    .padding()
+    .padding(family == .systemSmall ? 13 : 14)
     .containerBackground(for: .widget) {
-      LinearGradient(
-        colors: [Color.accentColor.opacity(0.12), Color.clear], startPoint: .topLeading,
-        endPoint: .bottomTrailing)
+      WatchioSurface()
     }
+    .environment(\.colorScheme, .dark)
     .widgetURL(URL(string: "watchio://services"))
   }
 
@@ -151,9 +150,35 @@ struct WatchioWidgetView: View {
     }
   }
 
+  private var aiActivities: [DetectedAIActivity] {
+    guard entry.configuration.projectScope == .single,
+      let name = entry.configuration.projectName?.trimmingCharacters(in: .whitespacesAndNewlines),
+      !name.isEmpty
+    else { return entry.snapshot.aiActivities }
+    return entry.snapshot.aiActivities.filter {
+      $0.projectName?.localizedCaseInsensitiveCompare(name) == .orderedSame
+    }
+  }
+
   private var isOffline: Bool {
     entry.snapshot.isStale(referenceDate: entry.date, threshold: 30)
       || entry.snapshot.collectorState == .offline
+  }
+
+  private var visibleResourceAlerts: [ResourceAlert] {
+    let serviceIDs = Set(services.map(\.id))
+    let aiIDs = Set(aiActivities.map(\.id))
+    return entry.snapshot.resourceAlerts.filter { alert in
+      switch entry.configuration.viewMode {
+      case .services, .ports:
+        alert.subjectKind == .service && serviceIDs.contains(alert.subjectID)
+      case .ai:
+        alert.subjectKind == .aiActivity && aiIDs.contains(alert.subjectID)
+      case .health:
+        (alert.subjectKind == .service && serviceIDs.contains(alert.subjectID))
+          || (alert.subjectKind == .aiActivity && aiIDs.contains(alert.subjectID))
+      }
+    }
   }
 
   @ViewBuilder private var content: some View {
@@ -164,6 +189,12 @@ struct WatchioWidgetView: View {
       } else {
         serviceList(limit: family == .systemLarge ? 4 : 3)
       }
+    case .ai:
+      if family == .systemSmall {
+        smallAIActivity
+      } else {
+        aiActivityList(limit: family == .systemLarge ? 4 : 3)
+      }
     case .ports:
       portList
     case .health:
@@ -171,85 +202,250 @@ struct WatchioWidgetView: View {
     }
   }
 
-  private var smallServices: some View {
-    VStack(alignment: .leading, spacing: 5) {
+  private var smallAIActivity: some View {
+    VStack(spacing: 0) {
       widgetHeader
       Spacer()
-      Text(services.count, format: .number)
-        .font(.system(size: 42, weight: .black, design: .rounded))
-        .contentTransition(.numericText())
-      Text(services.count == 1 ? "service is live" : "services are live")
-        .font(.caption).foregroundStyle(.secondary)
-      HStack(spacing: 5) {
-        ForEach(Array(Set(services.flatMap(\.ports).map(\.port))).sorted().prefix(3), id: \.self) {
-          port in
-          Text(":\(port)").font(.system(.caption2, design: .monospaced, weight: .semibold))
+      ZStack {
+        Circle()
+          .fill(
+            RadialGradient(
+              colors: [Color.purple.opacity(0.18), .clear], center: .center, startRadius: 0,
+              endRadius: 42)
+          )
+        Circle().stroke(
+          visibleResourceAlerts.isEmpty ? Color.purple.opacity(0.25) : Color.orange.opacity(0.65),
+          lineWidth: 1)
+        VStack(spacing: 1) {
+          Text(aiActivities.count, format: .number)
+            .font(.system(size: 28, weight: .medium, design: .monospaced))
+            .foregroundStyle(Color(red: 0.85, green: 0.76, blue: 1))
+          Text("AI ACTIVE")
+            .font(.system(size: 7.5, weight: .bold, design: .rounded))
+            .tracking(0.9)
+            .foregroundStyle(WatchioPalette.secondaryText)
         }
       }
+      .frame(width: 76, height: 76)
+      Spacer()
+      Text(
+        visibleResourceAlerts.isEmpty
+          ? (aiActivities.isEmpty ? "No AI activity" : aiProjectSummary)
+          : resourceAlertSummary
+      )
+      .font(.system(size: 11, weight: .semibold))
+      .foregroundStyle(visibleResourceAlerts.isEmpty ? .white : .orange)
+      .lineLimit(1)
+      HStack(spacing: 5) {
+        ForEach(Array(aiActivities.prefix(3))) { activity in
+          AIToolGlyph(tool: activity.tool, size: 20)
+        }
+      }
+      .frame(height: 22)
+    }
+  }
+
+  private var smallServices: some View {
+    VStack(spacing: 0) {
+      widgetHeader
+      Spacer()
+      ZStack {
+        Circle()
+          .fill(
+            RadialGradient(
+              colors: [WatchioPalette.accent.opacity(0.12), .clear],
+              center: .center,
+              startRadius: 0,
+              endRadius: 48
+            )
+          )
+        Circle().stroke(
+          visibleResourceAlerts.isEmpty
+            ? WatchioPalette.accent.opacity(0.22) : Color.orange.opacity(0.65),
+          lineWidth: 1)
+        Circle().stroke(WatchioPalette.accent.opacity(0.04), lineWidth: 7)
+        VStack(spacing: 1) {
+          Text(services.count, format: .number)
+            .font(.system(size: 28, weight: .medium, design: .monospaced))
+            .foregroundStyle(Color(red: 0.82, green: 1, blue: 0.66))
+            .contentTransition(.numericText())
+          Text("LIVE")
+            .font(.system(size: 8, weight: .bold, design: .rounded))
+            .tracking(1.2)
+            .foregroundStyle(WatchioPalette.secondaryText)
+        }
+      }
+      .frame(width: 76, height: 76)
+      Spacer()
+      Text(
+        visibleResourceAlerts.isEmpty
+          ? (services.isEmpty ? "No services detected" : "Systems nominal")
+          : resourceAlertSummary
+      )
+      .font(.system(size: 12, weight: .semibold))
+      .foregroundStyle(visibleResourceAlerts.isEmpty ? .white : .orange)
+      HStack(spacing: 7) {
+        ForEach(Array(Set(services.flatMap(\.ports).map(\.port))).sorted().prefix(3), id: \.self) {
+          port in
+          Text(":\(port)")
+            .font(.system(size: 9, weight: .semibold, design: .monospaced))
+            .foregroundStyle(WatchioPalette.secondaryText)
+        }
+      }
+      .frame(height: 13)
     }
   }
 
   private func serviceList(limit: Int) -> some View {
-    VStack(alignment: .leading, spacing: family == .systemLarge ? 9 : 6) {
+    VStack(alignment: .leading, spacing: family == .systemLarge ? 7 : 4) {
       widgetHeader
       ForEach(Array(services.prefix(limit))) { service in
-        WidgetServiceRow(service: service)
+        WidgetServiceRow(
+          service: service, expanded: family == .systemLarge,
+          alert: alert(subjectKind: .service, subjectID: service.id))
       }
-      if services.isEmpty { Text("No services detected").foregroundStyle(.secondary) }
+      if services.isEmpty {
+        Text("No services detected").font(.caption).foregroundStyle(WatchioPalette.secondaryText)
+      }
       Spacer(minLength: 0)
       if family == .systemLarge { aggregateFooter }
     }
   }
 
+  private func aiActivityList(limit: Int) -> some View {
+    VStack(alignment: .leading, spacing: family == .systemLarge ? 7 : 4) {
+      widgetHeader
+      ForEach(Array(aiActivities.prefix(limit))) { activity in
+        WidgetAIActivityRow(
+          activity: activity, expanded: family == .systemLarge,
+          alert: alert(subjectKind: .aiActivity, subjectID: activity.id))
+      }
+      if aiActivities.isEmpty {
+        Text("No AI activity").font(.caption).foregroundStyle(WatchioPalette.secondaryText)
+      }
+      Spacer(minLength: 0)
+      if family == .systemLarge { aiAggregateFooter }
+    }
+  }
+
   private var portList: some View {
-    VStack(alignment: .leading, spacing: 8) {
+    VStack(alignment: .leading, spacing: family == .systemLarge ? 7 : 4) {
       widgetHeader
       ForEach(
         Array(
           services.flatMap { service in service.ports.map { (service, $0) } }.prefix(
             family == .systemSmall ? 3 : 6)), id: \.1.id
       ) { item in
-        HStack {
-          Text(item.1.displayValue).font(.system(.headline, design: .monospaced, weight: .bold))
-          Text(item.1.transport.rawValue.uppercased()).font(.caption2).foregroundStyle(.secondary)
+        HStack(spacing: 8) {
+          if family != .systemSmall {
+            RuntimeGlyph(runtime: item.0.runtime, serviceName: item.0.name, size: 26)
+          }
+          Text(item.1.displayValue)
+            .font(.system(.headline, design: .monospaced, weight: .semibold))
+            .foregroundStyle(WatchioPalette.accent)
+          Text(item.1.transport.rawValue.uppercased())
+            .font(.system(size: 8, weight: .bold, design: .rounded))
+            .foregroundStyle(WatchioPalette.secondaryText)
           Spacer()
-          if family != .systemSmall { Text(item.0.name).lineLimit(1).foregroundStyle(.secondary) }
+          if family != .systemSmall {
+            Text(item.0.name).font(.caption).lineLimit(1).foregroundStyle(.white.opacity(0.8))
+          }
         }
+        .padding(.horizontal, 8)
+        .padding(.vertical, family == .systemLarge ? 6 : 3)
+        .background(WatchioPalette.card, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
       }
       Spacer(minLength: 0)
     }
   }
 
   private var healthView: some View {
-    VStack(alignment: .leading, spacing: 8) {
+    VStack(alignment: .leading, spacing: family == .systemLarge ? 8 : 5) {
       widgetHeader
-      ForEach(entry.snapshot.sourceHealth.prefix(family == .systemSmall ? 3 : 4)) { source in
-        HStack {
-          Circle().fill(source.state == .available ? .green : .orange).frame(width: 7, height: 7)
-          Text(source.source.rawValue.capitalized)
+      ForEach(visibleResourceAlerts.prefix(family == .systemSmall ? 1 : 2)) { alert in
+        WidgetResourceAlertRow(alert: alert, compact: family == .systemSmall)
+      }
+      ForEach(
+        entry.snapshot.sourceHealth.prefix(
+          family == .systemSmall ? (visibleResourceAlerts.isEmpty ? 3 : 2) : 4)
+      ) { source in
+        HStack(spacing: 8) {
+          Image(
+            systemName: source.state == .available
+              ? "checkmark.circle.fill" : "exclamationmark.triangle.fill"
+          )
+          .foregroundStyle(source.state == .available ? WatchioPalette.accentSoft : .orange)
+          Text(source.source.rawValue.capitalized).fontWeight(.semibold)
           Spacer()
           if family != .systemSmall {
-            Text(source.state.rawValue.capitalized).foregroundStyle(.secondary)
+            Text(source.state.rawValue.capitalized).foregroundStyle(WatchioPalette.secondaryText)
           }
         }
         .font(.caption)
+        .padding(.horizontal, 8)
+        .padding(.vertical, family == .systemLarge ? 8 : 5)
+        .background(WatchioPalette.card, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
       }
       Spacer(minLength: 0)
     }
   }
 
   private var widgetHeader: some View {
-    HStack {
-      Text("w:").font(.system(.headline, design: .monospaced, weight: .black)).foregroundStyle(
-        .tint)
+    HStack(spacing: 8) {
+      WatchioMark(compact: true)
+      if family != .systemSmall {
+        VStack(alignment: .leading, spacing: 1) {
+          Text(entry.configuration.viewMode == .ai ? "AI activity" : "Local development")
+            .font(.system(size: 11, weight: .semibold))
+          Text(headerSubtitle)
+            .font(.system(size: 8.5))
+            .foregroundStyle(WatchioPalette.secondaryText)
+        }
+      }
       Spacer()
-      Text(entry.snapshot.generatedAt, style: .timer).font(.caption2).foregroundStyle(.secondary)
+      if !visibleResourceAlerts.isEmpty {
+        Label("\(visibleResourceAlerts.count)", systemImage: "exclamationmark.triangle.fill")
+          .font(.system(size: 8.5, weight: .bold, design: .rounded))
+          .foregroundStyle(.orange)
+          .accessibilityLabel(resourceAlertSummary)
+      }
+      Text(entry.snapshot.generatedAt, style: .timer)
+        .font(.system(size: 8.5, design: .monospaced))
+        .foregroundStyle(WatchioPalette.secondaryText)
         .monospacedDigit()
     }
   }
 
+  private var headerSubtitle: String {
+    if entry.configuration.viewMode == .ai {
+      return "\(aiActivities.count) active · \(aiProjectCount) projects"
+    }
+    return "\(services.count) running · all projects"
+  }
+
+  private var aiProjectCount: Int {
+    Set(aiActivities.compactMap(\.projectName)).count
+  }
+
+  private var aiProjectSummary: String {
+    aiProjectCount == 1 ? "1 project" : "\(aiProjectCount) projects"
+  }
+
+  private var resourceAlertSummary: String {
+    visibleResourceAlerts.count == 1
+      ? "1 resource alert" : "\(visibleResourceAlerts.count) resource alerts"
+  }
+
+  private func alert(
+    subjectKind: ResourceAlertSubjectKind, subjectID: String
+  ) -> ResourceAlert? {
+    entry.snapshot.resourceAlerts.first {
+      $0.subjectKind == subjectKind && $0.subjectID == subjectID
+    }
+  }
+
   private var aggregateFooter: some View {
-    VStack(spacing: 6) {
+    HStack(spacing: 8) {
       HStack {
         metric("CPU", String(format: "%.1f%%", services.compactMap(\.cpuPercent).reduce(0, +)))
         metric(
@@ -260,51 +456,115 @@ struct WatchioWidgetView: View {
           ))
         metric("Listeners", String(services.flatMap(\.ports).count))
       }
+      Divider().overlay(Color.white.opacity(0.09)).padding(.vertical, 2)
       MiniTrend(samples: entry.trend)
-        .frame(height: 24)
+        .frame(width: 86, height: 34)
         .accessibilityLabel("Recent in-memory CPU activity")
+    }
+    .padding(10)
+    .background(WatchioPalette.card, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+    .overlay {
+      RoundedRectangle(cornerRadius: 12, style: .continuous)
+        .stroke(WatchioPalette.cardBorder, lineWidth: 1)
+    }
+  }
+
+  private var aiAggregateFooter: some View {
+    HStack {
+      metric("CPU", String(format: "%.1f%%", aiActivities.map(\.cpuPercent).reduce(0, +)))
+      metric(
+        "Memory",
+        ByteCountFormatter.string(
+          fromByteCount: Int64(aiActivities.map(\.memoryBytes).reduce(0, +)),
+          countStyle: .memory
+        ))
+      metric("Processes", String(aiActivities.map(\.processCount).reduce(0, +)))
+      metric("Projects", String(aiProjectCount))
+    }
+    .padding(10)
+    .background(WatchioPalette.card, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+    .overlay {
+      RoundedRectangle(cornerRadius: 12, style: .continuous)
+        .stroke(WatchioPalette.cardBorder, lineWidth: 1)
     }
   }
 
   private func metric(_ label: String, _ value: String) -> some View {
     VStack(alignment: .leading, spacing: 1) {
-      Text(label).font(.caption2).foregroundStyle(.secondary)
-      Text(value).font(.system(.caption, design: .monospaced, weight: .semibold))
+      Text(label).font(.system(size: 8)).foregroundStyle(WatchioPalette.secondaryText)
+      Text(value).font(.system(size: 10, weight: .semibold, design: .monospaced))
     }.frame(maxWidth: .infinity, alignment: .leading)
   }
 
   private func stateView(_ title: String, _ symbol: String, _ detail: String) -> some View {
     VStack(alignment: .leading, spacing: 8) {
-      Text("w:").font(.system(.headline, design: .monospaced, weight: .black)).foregroundStyle(
-        .tint)
+      WatchioMark(compact: true)
       Spacer()
-      Image(systemName: symbol).font(.title2).foregroundStyle(.secondary)
+      Image(systemName: symbol).font(.title2).foregroundStyle(WatchioPalette.secondaryText)
       Text(title).font(.headline)
-      Text(detail).font(.caption).foregroundStyle(.secondary).lineLimit(2)
+      Text(detail).font(.caption).foregroundStyle(WatchioPalette.secondaryText).lineLimit(2)
     }
   }
 }
 
 private struct WidgetServiceRow: View {
   let service: DetectedService
+  let expanded: Bool
+  let alert: ResourceAlert?
 
   var body: some View {
     Link(destination: URL(string: "watchio://service/\(service.id)")!) {
-      HStack(spacing: 8) {
-        Text(service.runtime.badge)
-          .font(.system(size: 9, weight: .bold, design: .monospaced))
-          .frame(width: 26, height: 20)
-          .background(.tint.opacity(0.14), in: RoundedRectangle(cornerRadius: 5))
-        VStack(alignment: .leading, spacing: 1) {
-          Text(service.name).font(.caption.weight(.semibold)).lineLimit(1)
-          Text(service.projectName).font(.caption2).foregroundStyle(.secondary).lineLimit(1)
+      HStack(spacing: expanded ? 9 : 7) {
+        RuntimeGlyph(
+          runtime: service.runtime,
+          serviceName: service.name,
+          size: expanded ? 34 : 26
+        )
+        VStack(alignment: .leading, spacing: expanded ? 2 : 0) {
+          HStack(spacing: 5) {
+            Text(service.name)
+              .font(.system(size: expanded ? 11 : 9.5, weight: .semibold))
+              .lineLimit(1)
+            Circle()
+              .fill(WatchioPalette.accentSoft)
+              .frame(width: 4, height: 4)
+          }
+          Text(service.projectName)
+            .font(.system(size: expanded ? 8.5 : 7.5))
+            .foregroundStyle(WatchioPalette.secondaryText)
+            .lineLimit(1)
         }
         Spacer()
-        if let port = service.ports.first {
-          Text(port.displayValue).font(.system(.caption, design: .monospaced, weight: .semibold))
+        if let alert {
+          ResourceAlertGlyph(alert: alert)
         }
-        Text(widgetUptime(service)).font(.caption2).foregroundStyle(.secondary).frame(
-          width: 42, alignment: .trailing)
+        if let port = service.ports.first {
+          Text(port.displayValue)
+            .font(.system(size: expanded ? 10 : 9, weight: .semibold, design: .monospaced))
+            .foregroundStyle(WatchioPalette.accent)
+            .padding(.horizontal, 6)
+            .padding(.vertical, 3)
+            .background(
+              WatchioPalette.accent.opacity(0.085),
+              in: RoundedRectangle(cornerRadius: 6, style: .continuous)
+            )
+        } else if expanded {
+          Text("worker")
+            .font(.system(size: 8, design: .monospaced))
+            .foregroundStyle(WatchioPalette.secondaryText)
+        }
+        Text(widgetUptime(service))
+          .font(.system(size: expanded ? 8.5 : 7.5, design: .monospaced))
+          .foregroundStyle(WatchioPalette.secondaryText)
+          .frame(width: expanded ? 34 : 27, alignment: .trailing)
+      }
+      .padding(.horizontal, expanded ? 9 : 6)
+      .padding(.vertical, expanded ? 6 : 2)
+      .background(WatchioPalette.card, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+      .overlay {
+        RoundedRectangle(cornerRadius: 10, style: .continuous)
+          .stroke(
+            alert == nil ? WatchioPalette.cardBorder : Color.orange.opacity(0.5), lineWidth: 1)
       }
     }
     .buttonStyle(.plain)
@@ -317,26 +577,154 @@ private struct WidgetServiceRow: View {
   }
 }
 
+private struct WidgetAIActivityRow: View {
+  let activity: DetectedAIActivity
+  let expanded: Bool
+  let alert: ResourceAlert?
+
+  var body: some View {
+    Link(destination: URL(string: "watchio://ai/\(activity.id)")!) {
+      HStack(spacing: expanded ? 9 : 7) {
+        AIToolGlyph(tool: activity.tool, size: expanded ? 34 : 26)
+        VStack(alignment: .leading, spacing: expanded ? 2 : 0) {
+          HStack(spacing: 5) {
+            Text(activity.tool.displayName)
+              .font(.system(size: expanded ? 11 : 9.5, weight: .semibold))
+              .lineLimit(1)
+            Circle()
+              .fill(WatchioPalette.accentSoft)
+              .frame(width: 4, height: 4)
+          }
+          Text(activity.projectName ?? "No project context")
+            .font(.system(size: expanded ? 8.5 : 7.5))
+            .foregroundStyle(WatchioPalette.secondaryText)
+            .lineLimit(1)
+        }
+        Spacer()
+        if let alert {
+          ResourceAlertGlyph(alert: alert)
+        }
+        VStack(alignment: .trailing, spacing: 2) {
+          HStack(spacing: 6) {
+            Text(activity.host.displayName)
+              .font(.system(size: expanded ? 8 : 7.5, weight: .medium, design: .rounded))
+              .foregroundStyle(.white.opacity(0.68))
+            Text(widgetUptime(activity))
+              .font(.system(size: expanded ? 8.5 : 7.5, design: .monospaced))
+              .foregroundStyle(WatchioPalette.secondaryText)
+          }
+          Text("CPU \(widgetCPU(activity.cpuPercent)) · RAM \(widgetMemory(activity.memoryBytes))")
+            .font(.system(size: expanded ? 7.5 : 6.5, weight: .medium, design: .monospaced))
+            .foregroundStyle(Color.white.opacity(0.56))
+            .lineLimit(1)
+        }
+      }
+      .padding(.horizontal, expanded ? 9 : 6)
+      .padding(.vertical, expanded ? 6 : 2)
+      .background(WatchioPalette.card, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+      .overlay {
+        RoundedRectangle(cornerRadius: 10, style: .continuous)
+          .stroke(
+            alert == nil ? WatchioPalette.cardBorder : Color.orange.opacity(0.5), lineWidth: 1)
+      }
+    }
+    .buttonStyle(.plain)
+  }
+
+  private func widgetUptime(_ activity: DetectedAIActivity) -> String {
+    let value = activity.uptime()
+    if value >= 3_600 { return "\(Int(value / 3_600))h" }
+    return "\(max(1, Int(value / 60)))m"
+  }
+
+  private func widgetCPU(_ value: Double) -> String {
+    String(format: "%.1f%%", value)
+  }
+
+  private func widgetMemory(_ bytes: UInt64) -> String {
+    let mebibytes = Double(bytes) / 1_048_576
+    if mebibytes >= 1_024 { return String(format: "%.1f GB", mebibytes / 1_024) }
+    return "\(Int(mebibytes.rounded())) MB"
+  }
+}
+
+private struct ResourceAlertGlyph: View {
+  let alert: ResourceAlert
+
+  var body: some View {
+    Image(systemName: alert.kind == .memory ? "memorychip.fill" : "bolt.fill")
+      .font(.system(size: 8.5, weight: .semibold))
+      .foregroundStyle(.orange)
+      .accessibilityLabel(alert.kind.displayName)
+  }
+}
+
+private struct WidgetResourceAlertRow: View {
+  let alert: ResourceAlert
+  let compact: Bool
+
+  var body: some View {
+    HStack(spacing: 8) {
+      ResourceAlertGlyph(alert: alert)
+      VStack(alignment: .leading, spacing: 1) {
+        Text(alert.subjectName)
+          .font(.system(size: 10, weight: .semibold))
+          .lineLimit(1)
+        if !compact {
+          Text(alert.kind.displayName)
+            .font(.system(size: 8))
+            .foregroundStyle(WatchioPalette.secondaryText)
+        }
+      }
+      Spacer()
+      Text(value)
+        .font(.system(size: 8.5, weight: .semibold, design: .monospaced))
+        .foregroundStyle(.orange)
+    }
+    .padding(.horizontal, 8)
+    .padding(.vertical, compact ? 5 : 7)
+    .background(Color.orange.opacity(0.065), in: RoundedRectangle(cornerRadius: 10))
+    .overlay {
+      RoundedRectangle(cornerRadius: 10).stroke(Color.orange.opacity(0.32), lineWidth: 1)
+    }
+    .accessibilityElement(children: .combine)
+  }
+
+  private var value: String {
+    switch alert.kind {
+    case .memory:
+      let mebibytes = Double(alert.memoryBytes ?? 0) / 1_048_576
+      return mebibytes >= 1_024
+        ? String(format: "%.1f GB", mebibytes / 1_024) : "\(Int(mebibytes.rounded())) MB"
+    case .energy:
+      return String(format: "%.0f%% CPU", alert.cpuPercent ?? 0)
+    }
+  }
+}
+
 private struct MiniTrend: View {
   let samples: [WidgetResourceSample]
 
   var body: some View {
     GeometryReader { geometry in
       let maximum = max(samples.map(\.cpuPercent).max() ?? 1, 1)
-      Path { path in
-        for (index, sample) in samples.enumerated() {
-          let x =
-            samples.count <= 1
-            ? 0 : geometry.size.width * CGFloat(index) / CGFloat(samples.count - 1)
-          let y = geometry.size.height * (1 - CGFloat(sample.cpuPercent / maximum))
-          if index == 0 {
-            path.move(to: CGPoint(x: x, y: y))
-          } else {
-            path.addLine(to: CGPoint(x: x, y: y))
-          }
+      HStack(alignment: .bottom, spacing: 3) {
+        ForEach(Array(samples.enumerated()), id: \.offset) { _, sample in
+          RoundedRectangle(cornerRadius: 1.5, style: .continuous)
+            .fill(
+              LinearGradient(
+                colors: [WatchioPalette.accentSoft, WatchioPalette.accent],
+                startPoint: .bottom,
+                endPoint: .top
+              )
+            )
+            .frame(
+              maxWidth: .infinity,
+              minHeight: 3,
+              maxHeight: max(3, geometry.size.height * CGFloat(sample.cpuPercent / maximum))
+            )
         }
       }
-      .stroke(.tint, style: StrokeStyle(lineWidth: 2, lineCap: .round, lineJoin: .round))
     }
   }
 }
@@ -376,6 +764,7 @@ struct WatchioWidget: Widget {
     .configurationDisplayName("Watchio")
     .description("See the development services and ports Watchio detected locally.")
     .supportedFamilies([.systemSmall, .systemMedium, .systemLarge])
+    .contentMarginsDisabled()
   }
 }
 

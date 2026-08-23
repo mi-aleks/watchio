@@ -33,7 +33,11 @@ make check
 
 ## Demo mode
 
-Add `--demo-data` to the Watchio scheme arguments to avoid showing workstation data. Add `--screenshot-mode` to open the deterministic native menu UI in a centered window for repository screenshots.
+Add `--demo-data` to the Watchio scheme arguments to avoid showing workstation data. Add
+`--screenshot-mode` to open the deterministic native menu UI in a centered window for repository
+screenshots. Add `--ai-mode` to open the AI activity tab. Maintainers can add `--live-data` to the
+screenshot window for local visual verification, but must never publish that workstation-specific
+output.
 
 ## Integration test
 

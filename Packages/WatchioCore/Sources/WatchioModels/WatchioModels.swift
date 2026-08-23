@@ -14,18 +14,6 @@ public enum RuntimeKind: String, Codable, CaseIterable, Hashable, Sendable {
     case .generic: "Process"
     }
   }
-
-  public var badge: String {
-    switch self {
-    case .node: "JS"
-    case .bun: "BN"
-    case .deno: "DN"
-    case .go: "GO"
-    case .python: "PY"
-    case .docker: "DB"
-    case .generic: "DEV"
-    }
-  }
 }
 
 public enum NetworkTransport: String, Codable, Hashable, Sendable { case tcp, udp }
@@ -77,13 +65,15 @@ public struct DetectedService: Codable, Hashable, Identifiable, Sendable {
   public let cpuPercent: Double?
   public let memoryBytes: UInt64?
   public let startedAt: Date?
+  public let representativeStartedAt: Date?
   public let confidence: Int
   public let evidence: [ConfidenceEvidence]
 
   public init(
     id: String, name: String, projectName: String, projectPath: String?, runtime: RuntimeKind,
     representativePID: Int32?, processCount: Int, ports: [ListeningEndpoint], cpuPercent: Double?,
-    memoryBytes: UInt64?, startedAt: Date?, confidence: Int, evidence: [ConfidenceEvidence]
+    memoryBytes: UInt64?, startedAt: Date?, representativeStartedAt: Date? = nil, confidence: Int,
+    evidence: [ConfidenceEvidence]
   ) {
     self.id = id
     self.name = name
@@ -96,6 +86,8 @@ public struct DetectedService: Codable, Hashable, Identifiable, Sendable {
     self.cpuPercent = cpuPercent
     self.memoryBytes = memoryBytes
     self.startedAt = startedAt
+    self.representativeStartedAt =
+      representativePID == nil ? nil : representativeStartedAt ?? startedAt
     self.confidence = confidence
     self.evidence = evidence
   }
@@ -103,6 +95,101 @@ public struct DetectedService: Codable, Hashable, Identifiable, Sendable {
   public func uptime(referenceDate: Date = .now) -> TimeInterval? {
     guard let startedAt else { return nil }
     return max(0, referenceDate.timeIntervalSince(startedAt))
+  }
+}
+
+public enum AIToolKind: String, Codable, CaseIterable, Hashable, Sendable {
+  case codex, claude, gemini, aider
+  case openCode = "opencode"
+  case goose, copilot, cursor
+
+  public var displayName: String {
+    switch self {
+    case .codex: "Codex"
+    case .claude: "Claude"
+    case .gemini: "Gemini"
+    case .aider: "Aider"
+    case .openCode: "OpenCode"
+    case .goose: "Goose"
+    case .copilot: "GitHub Copilot"
+    case .cursor: "Cursor Agent"
+    }
+  }
+}
+
+public enum AIActivityHost: String, Codable, Hashable, Sendable {
+  case terminal
+  case visualStudioCode = "vscode"
+  case desktop, background, subagent
+
+  public var displayName: String {
+    switch self {
+    case .terminal: "CLI"
+    case .visualStudioCode: "VS Code"
+    case .desktop: "Desktop"
+    case .background: "Background"
+    case .subagent: "Subagent"
+    }
+  }
+}
+
+public enum AIActivityEvidence: String, Codable, CaseIterable, Hashable, Sendable {
+  case knownExecutable, trustedInstallPath, projectWorkingDirectory, terminalSession, ideHost,
+    desktopHost, agentAncestry
+
+  public var displayName: String {
+    switch self {
+    case .knownExecutable: "Known AI executable"
+    case .trustedInstallPath: "Recognized installation path"
+    case .projectWorkingDirectory: "Project working directory"
+    case .terminalSession: "Terminal session"
+    case .ideHost: "IDE extension host"
+    case .desktopHost: "Desktop application host"
+    case .agentAncestry: "Spawned by another AI process"
+    }
+  }
+}
+
+public struct DetectedAIActivity: Codable, Hashable, Identifiable, Sendable {
+  public let id: String
+  public let tool: AIToolKind
+  public let host: AIActivityHost
+  public let projectName: String?
+  public let projectPath: String?
+  public let representativePID: Int32
+  public let processCount: Int
+  public let tty: String?
+  public let cpuPercent: Double
+  public let memoryBytes: UInt64
+  public let startedAt: Date
+  public let representativeStartedAt: Date
+  public let confidence: Int
+  public let evidence: [AIActivityEvidence]
+
+  public init(
+    id: String, tool: AIToolKind, host: AIActivityHost, projectName: String?,
+    projectPath: String?, representativePID: Int32, processCount: Int, tty: String?,
+    cpuPercent: Double, memoryBytes: UInt64, startedAt: Date,
+    representativeStartedAt: Date? = nil, confidence: Int, evidence: [AIActivityEvidence]
+  ) {
+    self.id = id
+    self.tool = tool
+    self.host = host
+    self.projectName = projectName
+    self.projectPath = projectPath
+    self.representativePID = representativePID
+    self.processCount = processCount
+    self.tty = tty
+    self.cpuPercent = cpuPercent
+    self.memoryBytes = memoryBytes
+    self.startedAt = startedAt
+    self.representativeStartedAt = representativeStartedAt ?? startedAt
+    self.confidence = confidence
+    self.evidence = evidence
+  }
+
+  public func uptime(referenceDate: Date = .now) -> TimeInterval {
+    max(0, referenceDate.timeIntervalSince(startedAt))
   }
 }
 
@@ -137,27 +224,80 @@ public struct ReviewSuggestion: Codable, Hashable, Identifiable, Sendable {
   public var id: String { service.id }
 }
 
+public enum ResourceAlertKind: String, Codable, Hashable, Sendable {
+  case memory
+  case energy
+
+  public var displayName: String {
+    switch self {
+    case .memory: "High memory use"
+    case .energy: "High energy use"
+    }
+  }
+}
+
+public enum ResourceAlertSubjectKind: String, Codable, Hashable, Sendable {
+  case service
+  case aiActivity
+}
+
+public struct ResourceAlert: Codable, Hashable, Identifiable, Sendable {
+  public let kind: ResourceAlertKind
+  public let subjectKind: ResourceAlertSubjectKind
+  public let subjectID: String
+  public let subjectName: String
+  public let memoryBytes: UInt64?
+  public let cpuPercent: Double?
+  public let thresholdMemoryBytes: UInt64?
+  public let thresholdCPUPercent: Double?
+  public let detectedAt: Date
+
+  public init(
+    kind: ResourceAlertKind, subjectKind: ResourceAlertSubjectKind, subjectID: String,
+    subjectName: String, memoryBytes: UInt64? = nil, cpuPercent: Double? = nil,
+    thresholdMemoryBytes: UInt64? = nil, thresholdCPUPercent: Double? = nil,
+    detectedAt: Date = .now
+  ) {
+    self.kind = kind
+    self.subjectKind = subjectKind
+    self.subjectID = subjectID
+    self.subjectName = subjectName
+    self.memoryBytes = memoryBytes
+    self.cpuPercent = cpuPercent
+    self.thresholdMemoryBytes = thresholdMemoryBytes
+    self.thresholdCPUPercent = thresholdCPUPercent
+    self.detectedAt = detectedAt
+  }
+
+  public var id: String { "\(kind.rawValue):\(subjectKind.rawValue):\(subjectID)" }
+}
+
 public struct WatchioSnapshot: Codable, Hashable, Sendable {
-  public static let currentSchemaVersion = 1
+  public static let currentSchemaVersion = 4
   public let schemaVersion: Int
   public let generatedAt: Date
   public let collectorState: CollectorState
   public let services: [DetectedService]
+  public let aiActivities: [DetectedAIActivity]
   public let reviewSuggestions: [ReviewSuggestion]
   public let sourceHealth: [SourceHealth]
+  public let resourceAlerts: [ResourceAlert]
 
   public init(
     schemaVersion: Int = WatchioSnapshot.currentSchemaVersion, generatedAt: Date = .now,
     collectorState: CollectorState, services: [DetectedService],
+    aiActivities: [DetectedAIActivity] = [],
     reviewSuggestions: [ReviewSuggestion] = [],
-    sourceHealth: [SourceHealth] = []
+    sourceHealth: [SourceHealth] = [], resourceAlerts: [ResourceAlert] = []
   ) {
     self.schemaVersion = schemaVersion
     self.generatedAt = generatedAt
     self.collectorState = collectorState
     self.services = services
+    self.aiActivities = aiActivities
     self.reviewSuggestions = reviewSuggestions
     self.sourceHealth = sourceHealth
+    self.resourceAlerts = resourceAlerts
   }
 
   public static let empty = WatchioSnapshot(
@@ -175,11 +315,20 @@ public struct DetectionPreferences: Codable, Hashable, Sendable {
   public var includeRules: [String]
   public var ignoreRules: [String]
   public var showProjectPaths: Bool
+  public var observeAIActivity: Bool
+  public var resourceAlertsEnabled: Bool
+  public var systemNotificationsEnabled: Bool
+  public var memoryAlertThresholdBytes: UInt64
+  public var energyAlertCPUThresholdPercent: Double
 
   public init(
     scanInterval: TimeInterval = 10, projectRoots: [String] = [],
     enabledRuntimes: Set<RuntimeKind> = Set(RuntimeKind.allCases.filter { $0 != .generic }),
-    includeRules: [String] = [], ignoreRules: [String] = [], showProjectPaths: Bool = true
+    includeRules: [String] = [], ignoreRules: [String] = [], showProjectPaths: Bool = true,
+    observeAIActivity: Bool = true, resourceAlertsEnabled: Bool = true,
+    systemNotificationsEnabled: Bool = false,
+    memoryAlertThresholdBytes: UInt64 = 1_073_741_824,
+    energyAlertCPUThresholdPercent: Double = 80
   ) {
     self.scanInterval = scanInterval
     self.projectRoots = projectRoots
@@ -187,10 +336,17 @@ public struct DetectionPreferences: Codable, Hashable, Sendable {
     self.includeRules = includeRules
     self.ignoreRules = ignoreRules
     self.showProjectPaths = showProjectPaths
+    self.observeAIActivity = observeAIActivity
+    self.resourceAlertsEnabled = resourceAlertsEnabled
+    self.systemNotificationsEnabled = systemNotificationsEnabled
+    self.memoryAlertThresholdBytes = memoryAlertThresholdBytes
+    self.energyAlertCPUThresholdPercent = energyAlertCPUThresholdPercent
   }
 
   private enum CodingKeys: String, CodingKey {
-    case scanInterval, projectRoots, enabledRuntimes, includeRules, ignoreRules, showProjectPaths
+    case scanInterval, projectRoots, enabledRuntimes, includeRules, ignoreRules, showProjectPaths,
+      observeAIActivity, resourceAlertsEnabled, systemNotificationsEnabled,
+      memoryAlertThresholdBytes, energyAlertCPUThresholdPercent
   }
 
   public init(from decoder: any Decoder) throws {
@@ -203,6 +359,17 @@ public struct DetectionPreferences: Codable, Hashable, Sendable {
     includeRules = try container.decodeIfPresent([String].self, forKey: .includeRules) ?? []
     ignoreRules = try container.decodeIfPresent([String].self, forKey: .ignoreRules) ?? []
     showProjectPaths = try container.decodeIfPresent(Bool.self, forKey: .showProjectPaths) ?? true
+    observeAIActivity =
+      try container.decodeIfPresent(Bool.self, forKey: .observeAIActivity) ?? true
+    resourceAlertsEnabled =
+      try container.decodeIfPresent(Bool.self, forKey: .resourceAlertsEnabled) ?? true
+    systemNotificationsEnabled =
+      try container.decodeIfPresent(Bool.self, forKey: .systemNotificationsEnabled) ?? false
+    memoryAlertThresholdBytes =
+      try container.decodeIfPresent(UInt64.self, forKey: .memoryAlertThresholdBytes)
+      ?? 1_073_741_824
+    energyAlertCPUThresholdPercent =
+      try container.decodeIfPresent(Double.self, forKey: .energyAlertCPUThresholdPercent) ?? 80
   }
 }
 
@@ -279,12 +446,15 @@ public struct ContainerRecord: Hashable, Sendable {
 
 public struct DetectionResult: Hashable, Sendable {
   public let services: [DetectedService]
+  public let aiActivities: [DetectedAIActivity]
   public let reviewSuggestions: [ReviewSuggestion]
   public let sourceHealth: [SourceHealth]
   public init(
-    services: [DetectedService], reviewSuggestions: [ReviewSuggestion], sourceHealth: [SourceHealth]
+    services: [DetectedService], aiActivities: [DetectedAIActivity] = [],
+    reviewSuggestions: [ReviewSuggestion], sourceHealth: [SourceHealth]
   ) {
     self.services = services
+    self.aiActivities = aiActivities
     self.reviewSuggestions = reviewSuggestions
     self.sourceHealth = sourceHealth
   }
@@ -310,7 +480,7 @@ public enum DemoData {
         id: "demo-web", name: "watchio-web", projectName: "watchio", projectPath: "~/Code/watchio",
         runtime: .node, representativePID: 48_211, processCount: 3,
         ports: [ListeningEndpoint(transport: .tcp, address: "127.0.0.1", port: 3010)],
-        cpuPercent: 3.2, memoryBytes: 184 * 1_024 * 1_024,
+        cpuPercent: 3.2, memoryBytes: 1_280 * 1_024 * 1_024,
         startedAt: .now.addingTimeInterval(-1_080),
         confidence: 100, evidence: [.projectRoot, .supportedRuntime, .listeningEndpoint]
       ),
@@ -337,6 +507,47 @@ public enum DemoData {
         memoryBytes: nil, startedAt: .now.addingTimeInterval(-2_520), confidence: 100,
         evidence: [.dockerMetadata, .listeningEndpoint]
       ),
+    ],
+    aiActivities: [
+      DetectedAIActivity(
+        id: "demo-ai-codex", tool: .codex, host: .desktop, projectName: nil,
+        projectPath: nil, representativePID: 14_378, processCount: 4, tty: nil,
+        cpuPercent: 2.4, memoryBytes: 410 * 1_024 * 1_024,
+        startedAt: .now.addingTimeInterval(-10_920), confidence: 90,
+        evidence: [.knownExecutable, .trustedInstallPath, .desktopHost]
+      ),
+      DetectedAIActivity(
+        id: "demo-ai-claude-atlas", tool: .claude, host: .terminal,
+        projectName: "atlas-web", projectPath: "~/Code/atlas-web", representativePID: 16_320,
+        processCount: 3, tty: "ttys007", cpuPercent: 1.6,
+        memoryBytes: 286 * 1_024 * 1_024, startedAt: .now.addingTimeInterval(-18_060),
+        confidence: 100,
+        evidence: [
+          .knownExecutable, .trustedInstallPath, .projectWorkingDirectory, .terminalSession,
+        ]
+      ),
+      DetectedAIActivity(
+        id: "demo-ai-claude-api", tool: .claude, host: .visualStudioCode,
+        projectName: "payments-api", projectPath: "~/Code/payments-api",
+        representativePID: 17_410, processCount: 2, tty: nil, cpuPercent: 0.8,
+        memoryBytes: 218 * 1_024 * 1_024, startedAt: .now.addingTimeInterval(-7_260),
+        confidence: 100,
+        evidence: [.knownExecutable, .trustedInstallPath, .projectWorkingDirectory, .ideHost]
+      ),
+      DetectedAIActivity(
+        id: "demo-ai-gemini", tool: .gemini, host: .terminal,
+        projectName: "design-system", projectPath: "~/Code/design-system",
+        representativePID: 18_502, processCount: 1, tty: "ttys009", cpuPercent: 0.3,
+        memoryBytes: 92 * 1_024 * 1_024, startedAt: .now.addingTimeInterval(-2_160), confidence: 95,
+        evidence: [.knownExecutable, .projectWorkingDirectory, .terminalSession]
+      ),
+    ],
+    resourceAlerts: [
+      ResourceAlert(
+        kind: .memory, subjectKind: .service, subjectID: "demo-web",
+        subjectName: "watchio-web", memoryBytes: 1_280 * 1_024 * 1_024,
+        thresholdMemoryBytes: 1_024 * 1_024 * 1_024,
+        detectedAt: .now.addingTimeInterval(-20))
     ]
   )
 }

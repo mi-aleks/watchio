@@ -4,9 +4,32 @@ All notable changes follow [Keep a Changelog](https://keepachangelog.com/en/1.1.
 
 ## [Unreleased]
 
+### Fixed
+
+- Ensure Settings is activated and brought forward when opened from the menu bar.
+
+### Added
+
+- Added a process-only AI activity view and widget mode for Codex, Claude, Gemini CLI, Aider,
+  OpenCode, Goose, GitHub Copilot CLI, and Cursor Agent.
+- Added host classification for CLI, VS Code, desktop, background, and separately executable
+  subagent processes, with descendant resource aggregation and explainable confidence evidence.
+- Added always-visible CPU and resident RAM totals to AI rows and Medium/Large AI widgets.
+- Added an explicitly confirmed Stop tree action for local services and AI activities, with same-user
+  identity checks, descendant stabilization, graceful termination, verified force-kill fallback,
+  survivor reporting, and deterministic PID-reuse safety tests.
+- Added sustained per-service and AI-process-tree memory alerts plus on-battery CPU energy alerts,
+  subtle widget/Health indicators, configurable thresholds, hysteresis, and opt-in quiet local
+  notifications with per-alert cooldowns and deep links.
+
 ### Changed
 
-- Nothing yet.
+- Replaced disruptive menu-bar warning symbols with a stable terminal mark and a subtle orange
+  attention dot.
+- Reworked the menu bar and every widget family around the darker, denser visual language from
+  the original Watchio concept.
+- Replaced generic text badges with original runtime glyphs and database-aware Docker Compose
+  presentation.
 
 ## [0.1.0-alpha.1] - 2026-08-23
 

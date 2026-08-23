@@ -12,6 +12,12 @@ final class WatchioModelsTests: XCTestCase {
     let decoded = try decoder.decode(WatchioSnapshot.self, from: encoder.encode(DemoData.snapshot))
     XCTAssertEqual(decoded.schemaVersion, WatchioSnapshot.currentSchemaVersion)
     XCTAssertEqual(decoded.services.count, 4)
+    XCTAssertEqual(decoded.aiActivities.count, 4)
+    XCTAssertEqual(decoded.resourceAlerts.map(\.id), ["memory:service:demo-web"])
+    XCTAssertTrue(
+      decoded.services.filter { $0.representativePID != nil }
+        .allSatisfy { $0.representativeStartedAt != nil })
+    XCTAssertTrue(decoded.aiActivities.allSatisfy { $0.representativeStartedAt <= .now })
     XCTAssertTrue(decoded.isCompatible)
   }
 
@@ -21,6 +27,7 @@ final class WatchioModelsTests: XCTestCase {
     XCTAssertFalse(text.lowercased().contains("environment"))
     XCTAssertFalse(text.lowercased().contains("commandline"))
     XCTAssertFalse(text.lowercased().contains("arguments"))
+    XCTAssertFalse(text.lowercased().contains("prompt"))
   }
 
   func testStableIdentifiersAreRepeatableAndOrderSensitive() {
@@ -35,5 +42,16 @@ final class WatchioModelsTests: XCTestCase {
     let snapshot = WatchioSnapshot(generatedAt: generated, collectorState: .active, services: [])
     XCTAssertFalse(snapshot.isStale(referenceDate: generated.addingTimeInterval(29)))
     XCTAssertTrue(snapshot.isStale(referenceDate: generated.addingTimeInterval(31)))
+  }
+
+  func testLegacyPreferencesMigrateResourceAlertsToSafeDefaults() throws {
+    let decoded = try JSONDecoder().decode(
+      DetectionPreferences.self,
+      from: Data(#"{"scanInterval":10,"projectRoots":[]}"#.utf8))
+
+    XCTAssertTrue(decoded.resourceAlertsEnabled)
+    XCTAssertFalse(decoded.systemNotificationsEnabled)
+    XCTAssertEqual(decoded.memoryAlertThresholdBytes, 1_073_741_824)
+    XCTAssertEqual(decoded.energyAlertCPUThresholdPercent, 80)
   }
 }

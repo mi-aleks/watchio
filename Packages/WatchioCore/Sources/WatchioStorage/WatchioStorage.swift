@@ -14,7 +14,10 @@ public protocol SnapshotStoring: Sendable {
 }
 
 public enum WatchioSharedContainer {
-  public static let snapshotFilename = "watchio-snapshot-v1.json"
+  public static let snapshotFilename = "watchio-snapshot-v4.json"
+  public static let legacySnapshotFilenames = [
+    "watchio-snapshot-v3.json", "watchio-snapshot-v2.json", "watchio-snapshot-v1.json",
+  ]
 
   public static func groupIdentifier(bundle: Bundle = .main) -> String? {
     guard let value = bundle.object(forInfoDictionaryKey: "WatchioAppGroupIdentifier") as? String,
@@ -61,17 +64,23 @@ public actor JSONSnapshotStore: SnapshotStoring {
 
   public func load() async -> SnapshotReadResult {
     let url = directory.appendingPathComponent(WatchioSharedContainer.snapshotFilename)
-    guard fileManager.fileExists(atPath: url.path) else { return .missing }
+    if fileManager.fileExists(atPath: url.path) { return readSnapshot(at: url) }
+    for filename in WatchioSharedContainer.legacySnapshotFilenames {
+      let legacyURL = directory.appendingPathComponent(filename)
+      if fileManager.fileExists(atPath: legacyURL.path) { return readSnapshot(at: legacyURL) }
+    }
+    return .missing
+  }
+
+  private func readSnapshot(at url: URL) -> SnapshotReadResult {
     do {
-      let data = try Data(contentsOf: url, options: [.mappedIfSafe])
+      let data = try Data(contentsOf: url)
       let envelope = try decoder.decode(SnapshotVersionEnvelope.self, from: data)
       guard envelope.schemaVersion == WatchioSnapshot.currentSchemaVersion else {
         return .updateRequired(foundVersion: envelope.schemaVersion)
       }
       return .snapshot(try decoder.decode(WatchioSnapshot.self, from: data))
-    } catch {
-      return .corrupt
-    }
+    } catch { return .corrupt }
   }
 
   public func save(_ snapshot: WatchioSnapshot) async throws {
@@ -81,8 +90,11 @@ public actor JSONSnapshotStore: SnapshotStoring {
     try fileManager.createDirectory(at: directory, withIntermediateDirectories: true)
     let url = directory.appendingPathComponent(WatchioSharedContainer.snapshotFilename)
     let data = try encoder.encode(snapshot)
-    try data.write(to: url, options: [.atomic, .completeFileProtectionUnlessOpen])
+    try data.write(to: url, options: .atomic)
     try? fileManager.setAttributes([.posixPermissions: 0o600], ofItemAtPath: url.path)
+    for filename in WatchioSharedContainer.legacySnapshotFilenames {
+      try? fileManager.removeItem(at: directory.appendingPathComponent(filename))
+    }
   }
 }
 
