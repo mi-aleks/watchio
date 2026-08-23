@@ -14,18 +14,6 @@ public enum RuntimeKind: String, Codable, CaseIterable, Hashable, Sendable {
     case .generic: "Process"
     }
   }
-
-  public var badge: String {
-    switch self {
-    case .node: "JS"
-    case .bun: "BN"
-    case .deno: "DN"
-    case .go: "GO"
-    case .python: "PY"
-    case .docker: "DB"
-    case .generic: "DEV"
-    }
-  }
 }
 
 public enum NetworkTransport: String, Codable, Hashable, Sendable { case tcp, udp }

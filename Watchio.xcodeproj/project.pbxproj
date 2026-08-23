@@ -23,6 +23,8 @@
 		A0000000000000000000000F /* WatchioStorage in Widget Frameworks */ = {isa = PBXBuildFile; productRef = A80000000000000000000006 /* WatchioStorage */; };
 		A00000000000000000000010 /* DemoWindowAppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000010 /* DemoWindowAppDelegate.swift */; };
 		A00000000000000000000011 /* WatchioUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000011 /* WatchioUITests.swift */; };
+		A00000000000000000000012 /* WatchioVisuals.swift in App Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000013 /* WatchioVisuals.swift */; };
+		A00000000000000000000013 /* WatchioVisuals.swift in Widget Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000013 /* WatchioVisuals.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -73,6 +75,7 @@
 		A10000000000000000000010 /* DemoWindowAppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DemoWindowAppDelegate.swift; sourceTree = "<group>"; };
 		A10000000000000000000011 /* WatchioUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchioUITests.swift; sourceTree = "<group>"; };
 		A10000000000000000000012 /* WatchioUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = WatchioUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		A10000000000000000000013 /* WatchioVisuals.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchioVisuals.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -84,7 +87,7 @@
 /* Begin PBXGroup section */
 		A50000000000000000000001 = {
 			isa = PBXGroup;
-			children = (A50000000000000000000002 /* WatchioApp */, A50000000000000000000003 /* WatchioWidget */, A50000000000000000000007 /* WatchioUITests */, A50000000000000000000004 /* Config */, A50000000000000000000005 /* Products */, );
+			children = (A50000000000000000000002 /* WatchioApp */, A50000000000000000000003 /* WatchioWidget */, A50000000000000000000008 /* WatchioSharedUI */, A50000000000000000000007 /* WatchioUITests */, A50000000000000000000004 /* Config */, A50000000000000000000005 /* Products */, );
 			sourceTree = "<group>";
 		};
 		A50000000000000000000002 /* WatchioApp */ = {
@@ -103,6 +106,7 @@
 		A50000000000000000000005 /* Products */ = {isa = PBXGroup; children = (A1000000000000000000000B, A1000000000000000000000A, A10000000000000000000012, ); name = Products; sourceTree = "<group>"; };
 		A50000000000000000000006 /* Views */ = {isa = PBXGroup; children = (A10000000000000000000003, A10000000000000000000004, A10000000000000000000005, ); path = Views; sourceTree = "<group>"; };
 		A50000000000000000000007 /* WatchioUITests */ = {isa = PBXGroup; children = (A10000000000000000000011, ); path = WatchioUITests; sourceTree = "<group>"; };
+		A50000000000000000000008 /* WatchioSharedUI */ = {isa = PBXGroup; children = (A10000000000000000000013, ); path = WatchioSharedUI; sourceTree = "<group>"; };
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
@@ -170,8 +174,8 @@
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
-		A30000000000000000000002 /* Sources */ = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (A00000000000000000000001, A00000000000000000000002, A00000000000000000000010, A00000000000000000000003, A00000000000000000000004, A00000000000000000000005, ); runOnlyForDeploymentPostprocessing = 0; };
-		A30000000000000000000004 /* Sources */ = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (A00000000000000000000006, ); runOnlyForDeploymentPostprocessing = 0; };
+		A30000000000000000000002 /* Sources */ = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (A00000000000000000000001, A00000000000000000000002, A00000000000000000000010, A00000000000000000000003, A00000000000000000000004, A00000000000000000000005, A00000000000000000000012, ); runOnlyForDeploymentPostprocessing = 0; };
+		A30000000000000000000004 /* Sources */ = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (A00000000000000000000006, A00000000000000000000013, ); runOnlyForDeploymentPostprocessing = 0; };
 		A30000000000000000000006 /* Sources */ = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (A00000000000000000000011, ); runOnlyForDeploymentPostprocessing = 0; };
 /* End PBXSourcesBuildPhase section */
 
