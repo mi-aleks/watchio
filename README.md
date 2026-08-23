@@ -102,15 +102,15 @@ Read [PRIVACY.md](PRIVACY.md), [SECURITY.md](SECURITY.md), and the [threat-consc
 
 ```mermaid
 flowchart LR
-  A[Visible menu bar app] --> E[DetectionEngine]
-  E --> P[/bin/ps]
-  E --> L[/usr/sbin/lsof]
-  E --> D[Active Docker CLI context]
-  E --> R[Project resolver]
-  E --> S[Confidence + grouping]
-  S --> M[Menu bar and Settings]
-  S --> J[Atomic versioned snapshot]
-  J --> W[Sandboxed WidgetKit extension]
+  A["Visible menu bar app"] --> E["DetectionEngine"]
+  E --> P["/bin/ps"]
+  E --> L["/usr/sbin/lsof"]
+  E --> D["Active Docker CLI context"]
+  E --> R["Project resolver"]
+  E --> S["Confidence + grouping"]
+  S --> M["Menu bar and Settings"]
+  S --> J["Atomic versioned snapshot"]
+  J --> W["Sandboxed WidgetKit extension"]
 ```
 
 The dependency-free local Swift package separates `WatchioModels`, `WatchioDetection`, and `WatchioStorage`. Protocol boundaries make every external inventory source fixture-testable. See [Architecture](docs/architecture.md) and [ADR-0001](docs/adr/0001-native-observe-only.md).
