@@ -1,0 +1,32 @@
+name: Feature proposal
+description: Propose a focused addition that preserves Watchio's local observe-only boundary.
+title: "[Feature]: "
+labels: [enhancement, needs-triage]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What developer problem exists today?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed experience
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Detection or data requirements
+      description: Explain what local, non-sensitive metadata is required.
+  - type: checkboxes
+    id: boundaries
+    attributes:
+      label: Product boundaries
+      options:
+        - label: The proposal remains observe-only and needs no root/helper/LaunchAgent.
+          required: true
+        - label: The proposal needs no telemetry, account, outbound Watchio networking, environment values, raw arguments, or persisted history.
+          required: true

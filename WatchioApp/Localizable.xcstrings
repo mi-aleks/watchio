@@ -1,0 +1,9 @@
+{
+  "sourceLanguage" : "en",
+  "strings" : {
+    "No development services" : { "comment" : "Empty state title" },
+    "Scan now" : { "comment" : "Runs development service detection immediately" },
+    "Watchio only shows stable processes with strong development evidence." : { "comment" : "Detection empty state explanation" }
+  },
+  "version" : "1.0"
+}
