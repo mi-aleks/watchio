@@ -18,6 +18,17 @@ Only records matching `getuid()` and at least three seconds old proceed. Watchio
 
 The process inventory is collected once per scan and shared by service and AI classification.
 
+## Resource alerts
+
+Resource alerts run after service and AI grouping, so thresholds apply to the complete logical
+process tree rather than one arbitrary child PID. Memory uses aggregate RSS. Energy uses aggregate
+CPU as an explicitly labeled proxy and is evaluated only when IOKit reports battery power.
+
+Both kinds require three consecutive samples over the configured threshold. An active alert clears
+after two samples below 80% of its threshold. This hysteresis suppresses short compiler spikes and
+borderline oscillation. Unknown power-source state fails closed for energy alerts. No alert can stop,
+renice, suspend, or otherwise mutate a process.
+
 ## Project resolution
 
 Default roots are existing `~/Code`, `~/Developer`, and `~/Projects`. Users can add roots. Starting from a candidate CWD, the resolver walks upward only inside configured roots and stops at the first supported marker:

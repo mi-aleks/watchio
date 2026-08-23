@@ -70,6 +70,22 @@ final class WatchioUITests: XCTestCase {
     XCTAssertTrue(app.textFields["include-rule"].waitForExistence(timeout: 3))
     XCTAssertTrue(app.textFields["ignore-rule"].exists)
     XCTAssertTrue(app.checkBoxes["detect-ai-activity"].exists)
+
+    app.buttons["Widget"].click()
+    XCTAssertTrue(
+      app.descendants(matching: .any)["resource-alerts-enabled"].waitForExistence(timeout: 3))
+    XCTAssertTrue(app.descendants(matching: .any)["resource-notifications-enabled"].exists)
+    XCTAssertTrue(app.descendants(matching: .any)["memory-alert-threshold"].exists)
+    XCTAssertTrue(app.descendants(matching: .any)["energy-alert-threshold"].exists)
+  }
+
+  func testDemoHealthShowsSubtleResourceAlert() {
+    let app = launchApp()
+    app.buttons["Health"].click()
+
+    XCTAssertTrue(
+      app.descendants(matching: .any)["resource-alert-memory:service:demo-web"]
+        .waitForExistence(timeout: 3))
   }
 
   private func launchApp(additionalArguments: [String] = []) -> XCUIApplication {

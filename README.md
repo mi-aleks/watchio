@@ -28,6 +28,7 @@ Watchio `0.1.0-alpha.1` is source-only. It is not signed, notarized, distributed
 - Automatic, explainable detection instead of a manually maintained service list
 - First-class Node.js, Bun, Deno, Go, Python, and Docker Compose support
 - Explicit local control: stop a selected, re-verified process tree after confirmation; never restart or act automatically
+- Sustained memory and on-battery energy alerts in the widget, with optional quiet local notifications
 - Fully local: no telemetry, accounts, network requests, root access, or stored history
 - Deliberately conservative: uncertain candidates go to Review instead of appearing silently
 
@@ -132,6 +133,20 @@ WidgetKit controls refresh timing. Watchio writes one versioned snapshot atomica
 
 Widget configuration supports Services, AI Activity, Ports, or Health, across all projects or a named project. Widget taps deep-link to `watchio://`.
 
+## Resource alerts
+
+Watchio can mark sustained resource pressure with a small amber indicator in every widget family and
+an explanatory row in Health. The default memory threshold is 1 GB of aggregate resident memory for
+one detected service or AI process tree. An energy alert requires at least 80% aggregate CPU while
+macOS reports that the Mac is drawing from its battery. It is deliberately labeled **High energy
+use**: macOS does not provide Watchio a reliable, unprivileged per-process battery percentage.
+
+An alert needs three consecutive scans to activate and two clearly lower samples to recover, which
+suppresses build spikes and visual flicker. Settings → Widget lets you change both thresholds, hide
+resource alerts, or opt into quiet macOS notifications. Notifications have no sound, deep-link to
+the affected row, and repeat no more than once per hour for the same alert. Evaluation happens in
+the visible collector; the WidgetKit extension only renders the latest local snapshot.
+
 ## Privacy and security
 
 Watchio is designed so useful output does not require sensitive input:
@@ -142,6 +157,7 @@ Watchio is designed so useful output does not require sensitive input:
 - AI prompts, conversation files, session history, and task titles are never read.
 - Home paths are shortened to `~`; external paths are reduced to a display name.
 - Only the latest snapshot is retained. Resource trends remain bounded in memory.
+- Resource alerts store only a safe row identifier/name, aggregate value, threshold, kind, and time.
 - There are no application network APIs, accounts, analytics, or update checks.
 - Docker collection refuses non-local CLI contexts, so discovery cannot contact a remote engine.
 - Subprocesses use fixed executable URLs, explicit arguments, timeouts, cancellation, and output limits—never shell interpolation.
@@ -167,10 +183,13 @@ flowchart LR
   C --> P
   C --> K["POSIX process signals"]
   S --> J["Atomic versioned snapshot"]
+  S --> A["Sustained resource alert evaluator"]
+  A --> J
+  A --> N["Optional quiet local notification"]
   J --> W["Sandboxed WidgetKit extension"]
 ```
 
-The dependency-free local Swift package separates `WatchioModels`, `WatchioDetection`, and `WatchioStorage`. Protocol boundaries make inventory and process signaling fixture-testable. See [Architecture](docs/architecture.md), [ADR-0001](docs/adr/0001-native-observe-only.md), and [ADR-0002](docs/adr/0002-safe-process-tree-control.md).
+The dependency-free local Swift package separates `WatchioModels`, `WatchioDetection`, and `WatchioStorage`. Protocol boundaries make inventory, resource-alert evaluation, and process signaling fixture-testable. See [Architecture](docs/architecture.md), [ADR-0001](docs/adr/0001-native-observe-only.md), [ADR-0002](docs/adr/0002-safe-process-tree-control.md), and [ADR-0003](docs/adr/0003-local-resource-alerts.md).
 
 ## Development
 
@@ -194,6 +213,7 @@ existing development process.
 - Apple Silicon only; Intel is not a release target.
 - Automatic detection is heuristic. Review the confidence evidence when a service is missing or surprising.
 - macOS may delay WidgetKit refreshes. The menu bar view is the freshest source.
+- Energy alerts use sustained CPU as a proxy and only evaluate while macOS reports battery power; they are not a battery-percentage measurement.
 - `lsof` and Docker can be unavailable or degraded; Watchio reports source health instead of failing the whole scan.
 - Service names are inferred without storing command arguments, so two identical runtimes in one process group may be grouped together.
 - AI activity is process-level, not conversation-level; internal desktop sessions are intentionally opaque.

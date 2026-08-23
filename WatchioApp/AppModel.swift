@@ -1,6 +1,7 @@
 import Foundation
 import Observation
 import ServiceManagement
+import UserNotifications
 import WatchioDetection
 import WatchioModels
 import WatchioStorage
@@ -31,11 +32,15 @@ final class AppModel {
 
   private let engine: DetectionEngine
   private let processTerminator: ProcessTreeTerminator
+  private let powerSourceProvider: any PowerSourceProviding
+  private let notificationController: ResourceNotificationController
   private let snapshotStore: any SnapshotStoring
   private let preferencesStore: DetectionPreferencesStore
   private let appDefaults: UserDefaults
   private let demoMode: Bool
   private var scanTask: Task<Void, Never>?
+  private var alertEvaluator = ResourceAlertEvaluator()
+  private var lastResourceNotificationAt: [String: Date] = [:]
   private var lastWidgetSignature = ""
   private var lastWidgetReloadAt: Date = .distantPast
 
@@ -44,12 +49,16 @@ final class AppModel {
     showOnboarding: Bool = ProcessInfo.processInfo.arguments.contains("--show-onboarding"),
     engine: DetectionEngine = DetectionEngine(),
     processTerminator: ProcessTreeTerminator = ProcessTreeTerminator(),
+    powerSourceProvider: any PowerSourceProviding = SystemPowerSourceProvider(),
+    notificationController: ResourceNotificationController = ResourceNotificationController(),
     snapshotStore: any SnapshotStoring = JSONSnapshotStore(),
     preferencesStore: DetectionPreferencesStore? = nil,
     appDefaults: UserDefaults = .standard
   ) {
     self.engine = engine
     self.processTerminator = processTerminator
+    self.powerSourceProvider = powerSourceProvider
+    self.notificationController = notificationController
     self.snapshotStore = snapshotStore
     self.appDefaults = appDefaults
     self.demoMode = demoMode
@@ -112,12 +121,17 @@ final class AppModel {
 
     let result = await engine.scan(preferences: preferences)
     let degraded = result.sourceHealth.contains { $0.state != .available }
+    let previousAlertIDs = Set(snapshot.resourceAlerts.map(\.id))
+    let resourceAlerts = alertEvaluator.evaluate(
+      services: result.services, aiActivities: result.aiActivities, preferences: preferences,
+      powerSource: powerSourceProvider.currentPowerSource())
     let next = WatchioSnapshot(
       collectorState: degraded ? .degraded : .active,
       services: result.services,
       aiActivities: result.aiActivities,
       reviewSuggestions: result.reviewSuggestions,
-      sourceHealth: result.sourceHealth
+      sourceHealth: result.sourceHealth,
+      resourceAlerts: resourceAlerts
     )
     snapshot = next
     selectedServiceID = selectedServiceID.flatMap { id in
@@ -148,6 +162,8 @@ final class AppModel {
       lastWidgetReloadAt = next.generatedAt
       WidgetCenter.shared.reloadTimelines(ofKind: "WatchioWidget")
     }
+    await deliverResourceNotifications(
+      resourceAlerts.filter { !previousAlertIDs.contains($0.id) }, at: next.generatedAt)
   }
 
   func savePreferences() {
@@ -157,6 +173,32 @@ final class AppModel {
       Task { await scanNow() }
     } catch {
       lastError = "Detection preferences could not be saved."
+    }
+  }
+
+  func setSystemNotificationsEnabled(_ enabled: Bool) {
+    guard enabled else {
+      preferences.systemNotificationsEnabled = false
+      savePreferences()
+      return
+    }
+    Task {
+      do {
+        let granted = try await notificationController.requestAuthorization()
+        preferences.systemNotificationsEnabled = granted
+        if granted {
+          savePreferences()
+          await deliverResourceNotifications(snapshot.resourceAlerts, at: .now)
+        } else {
+          try preferencesStore.save(preferences)
+          lastError =
+            "Notifications are disabled for Watchio. Enable them in System Settings → Notifications."
+        }
+      } catch {
+        preferences.systemNotificationsEnabled = false
+        try? preferencesStore.save(preferences)
+        lastError = "Watchio could not request notification permission."
+      }
     }
   }
 
@@ -254,8 +296,9 @@ final class AppModel {
       snapshot.services.compactMap(\.memoryBytes).reduce(0, +) / (64 * 1_024 * 1_024)
     let aiCPU = Int(snapshot.aiActivities.map(\.cpuPercent).reduce(0, +) / 5)
     let aiMemory = snapshot.aiActivities.map(\.memoryBytes).reduce(0, +) / (64 * 1_024 * 1_024)
+    let alerts = snapshot.resourceAlerts.map(\.id).joined(separator: ",")
     return
-      "\(snapshot.collectorState.rawValue)|\(services)|ai:\(aiActivities)|cpu:\(cpuBucket)|mem:\(memoryBucket)|aicpu:\(aiCPU)|aimem:\(aiMemory)"
+      "\(snapshot.collectorState.rawValue)|\(services)|ai:\(aiActivities)|cpu:\(cpuBucket)|mem:\(memoryBucket)|aicpu:\(aiCPU)|aimem:\(aiMemory)|alerts:\(alerts)"
   }
 
   private func normalizedRule(_ rawRule: String) -> String? {
@@ -294,7 +337,32 @@ final class AppModel {
     await scanNow()
   }
 
+  private func deliverResourceNotifications(_ alerts: [ResourceAlert], at date: Date) async {
+    guard preferences.systemNotificationsEnabled, !demoMode else { return }
+    for alert in alerts {
+      if let previous = lastResourceNotificationAt[alert.id],
+        date.timeIntervalSince(previous) < Self.resourceNotificationCooldown
+      {
+        continue
+      }
+      do {
+        try await notificationController.deliver(alert)
+        lastResourceNotificationAt[alert.id] = date
+      } catch {
+        if error is ResourceNotificationError {
+          preferences.systemNotificationsEnabled = false
+          try? preferencesStore.save(preferences)
+          lastError =
+            "Notifications are disabled for Watchio. Enable them in System Settings → Notifications."
+        } else {
+          lastError = "A Watchio resource notification could not be delivered."
+        }
+      }
+    }
+  }
+
   private static let onboardingKey = "watchio.onboarding-complete.v1"
+  private static let resourceNotificationCooldown: TimeInterval = 60 * 60
 
   private static func makePreferencesStore() -> DetectionPreferencesStore {
     if let identifier = WatchioSharedContainer.groupIdentifier(),
@@ -304,6 +372,53 @@ final class AppModel {
     }
     return DetectionPreferencesStore()
   }
+}
+
+actor ResourceNotificationController {
+  private let center = UNUserNotificationCenter.current()
+
+  func requestAuthorization() async throws -> Bool {
+    try await center.requestAuthorization(options: [.alert])
+  }
+
+  func deliver(_ alert: ResourceAlert) async throws {
+    let settings = await center.notificationSettings()
+    guard
+      settings.authorizationStatus == .authorized
+        || settings.authorizationStatus == .provisional
+    else { throw ResourceNotificationError.notAuthorized }
+
+    let content = UNMutableNotificationContent()
+    content.title = alert.kind.displayName
+    content.body = notificationBody(for: alert)
+    content.interruptionLevel = .passive
+    content.threadIdentifier = "watchio-resource-alerts"
+    content.userInfo = ["watchioURL": deepLink(for: alert).absoluteString]
+    try await center.add(
+      UNNotificationRequest(
+        identifier: "watchio-resource-\(alert.id)", content: content, trigger: nil))
+  }
+
+  private func notificationBody(for alert: ResourceAlert) -> String {
+    switch alert.kind {
+    case .memory:
+      let value = ByteCountFormatter.string(
+        fromByteCount: Int64(alert.memoryBytes ?? 0), countStyle: .memory)
+      return "\(alert.subjectName) is using \(value) of resident memory."
+    case .energy:
+      return
+        "\(alert.subjectName) is sustaining \(String(format: "%.0f%%", alert.cpuPercent ?? 0)) CPU while on battery."
+    }
+  }
+
+  private func deepLink(for alert: ResourceAlert) -> URL {
+    let host = alert.subjectKind == .aiActivity ? "ai" : "service"
+    return URL(string: "watchio://\(host)/\(alert.subjectID)")!
+  }
+}
+
+private enum ResourceNotificationError: Error {
+  case notAuthorized
 }
 
 @MainActor

@@ -28,3 +28,7 @@ process group. Identity change, unstable inventory, and permission failures fail
 All inventory subprocesses use fixed executable URLs and argument arrays, bounded output, timeouts,
 and cancellation. Shell interpolation is prohibited. Snapshot decoders fail closed on unknown schema
 versions. See [Architecture](docs/architecture.md) and [Privacy](PRIVACY.md).
+
+Resource alerts are observational and cannot trigger process control. Energy alerts use the local
+IOKit power-source state plus sustained aggregate CPU; no privileged energy sampler is invoked.
+Optional local notifications contain only snapshot-safe fields and are rate-limited in memory.
