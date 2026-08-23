@@ -18,4 +18,13 @@ You should receive an acknowledgement within 72 hours and an initial assessment 
 
 ## Security boundaries
 
-Watchio is observe-only and runs without root. All subprocesses use fixed executable URLs and argument arrays, bounded output, timeouts, and cancellation. Shell interpolation is prohibited. Snapshot decoders fail closed on unknown schema versions. See [Architecture](docs/architecture.md) and [Privacy](PRIVACY.md).
+Watchio runs without root and has no automatic or background process actions. Its only mutating
+capability is an explicitly confirmed, per-row stop of a same-user process tree. The control path
+re-verifies PID, UID, executable, and inferred start time; refuses Watchio and its ancestors;
+stabilizes descendants while frozen; uses `SIGTERM` before `SIGKILL`; and never broadcasts to a
+process group. Identity change, unstable inventory, and permission failures fail closed. See
+[ADR-0002](docs/adr/0002-safe-process-tree-control.md).
+
+All inventory subprocesses use fixed executable URLs and argument arrays, bounded output, timeouts,
+and cancellation. Shell interpolation is prohibited. Snapshot decoders fail closed on unknown schema
+versions. See [Architecture](docs/architecture.md) and [Privacy](PRIVACY.md).

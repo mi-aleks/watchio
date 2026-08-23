@@ -34,6 +34,17 @@ does not read its session database to enumerate conversations.
 
 Open its detail and note the non-sensitive evidence. File a sanitized false-positive report with runtime, evidence, and whether it had a project marker/listener. Do not paste full paths, arguments, environments, or proprietary names.
 
+## Stop tree was refused or reported survivors
+
+Watchio refuses a stop when the PID disappeared or changed identity, belongs to another user,
+owns the running Watchio instance, cannot be re-inventoried, or keeps changing descendants while
+frozen. Start a new scan and inspect the row again; do not retry against a copied PID.
+
+A survivor means macOS still reported a verified process after `SIGKILL`. The process may be in an
+uninterruptible kernel wait. An external supervisor may also create a new replacement with a new
+identity after Watchio finishes; that replacement is intentionally outside the selected tree.
+Docker Compose rows have no Stop tree action in this release.
+
 ## Docker is degraded
 
 Watchio searches common Apple Silicon and Docker Desktop CLI locations and uses the CLI's active context only when it resolves to a local Unix socket. Confirm `docker context inspect` and `docker ps` work in Terminal. Remote contexts are intentionally refused. Compose labels are required; standalone containers are not shown in this alpha.

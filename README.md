@@ -4,7 +4,7 @@
 
 <h1 align="center">Watchio</h1>
 
-<p align="center">A private, native macOS view of the development services and AI tools already running on your machine.</p>
+<p align="center">A private, native macOS view of—and safe stop control for—the development services and AI tools already running on your machine.</p>
 
 <p align="center">
   <a href="https://github.com/mi-aleks/watchio/actions/workflows/ci.yml"><img alt="CI status" src="https://github.com/mi-aleks/watchio/actions/workflows/ci.yml/badge.svg"></a>
@@ -27,7 +27,7 @@ Watchio `0.1.0-alpha.1` is source-only. It is not signed, notarized, distributed
 - A dedicated AI activity view recognizes supported CLI, IDE, desktop, and child-agent processes
 - Automatic, explainable detection instead of a manually maintained service list
 - First-class Node.js, Bun, Deno, Go, Python, and Docker Compose support
-- Observe-only: Watchio cannot stop, restart, or otherwise change a process
+- Explicit local control: stop a selected, re-verified process tree after confirmation; never restart or act automatically
 - Fully local: no telemetry, accounts, network requests, root access, or stored history
 - Deliberately conservative: uncertain candidates go to Review instead of appearing silently
 
@@ -60,7 +60,7 @@ make check
 |---|---|---|
 | Node.js | `node`, project marker, listener, terminal ancestry | Includes child processes in the logical service |
 | Bun | `bun` / `bunx`, project marker or terminal ancestry | Workers do not need a port |
-| Deno | `deno`, project marker or listener | Observe-only |
+| Deno | `deno`, project marker or listener | Workers do not need a port |
 | Go | `go` or a `go-build` executable, project marker/listener | Compiled binaries without Go metadata need strong project evidence |
 | Python | `python*`, project marker or terminal ancestry | Virtualenv and toolchain paths add evidence |
 | Docker Compose | Compose labels from the active local Docker CLI context | Remote contexts and raw Docker backend processes are suppressed |
@@ -106,6 +106,26 @@ desktop app that multiplexes several logical agents inside one OS process appear
 separate agent processes can appear independently. Script-based tools that expose only a generic
 `node` or `python` executable cannot be identified safely and remain hidden.
 
+## Safe process control
+
+Expand a service or AI activity and choose **Stop tree…** to stop its representative process and
+same-user descendants. Watchio always shows a destructive confirmation first. It does not expose
+bulk stop, automatic cleanup, restart, or a remote-control API. Docker Compose rows do not expose
+this action because their container lifecycle is not represented by a stable local PID.
+
+For a confirmed stop, Watchio:
+
+1. Re-resolves the selected PID and verifies UID, executable, and inferred start time.
+2. Refuses PID 1, another user's process, Watchio itself, or any ancestor that owns this Watchio instance.
+3. Temporarily freezes the root, discovers and freezes its descendants, and requires the tree to stabilize.
+4. Re-verifies every frozen identity, sends `SIGTERM` deepest-first, resumes the tree, and watches for new descendants for five seconds.
+5. Sends `SIGKILL` only to verified survivors, then reports any process that still appears alive.
+
+No shell, process-group broadcast, root privilege, or persisted command line is involved. The action
+is intentionally fail-closed: a changed PID, unstable tree, unavailable inventory, or permission
+failure stops the operation. An external supervisor outside the selected tree can still launch a new
+replacement process; Watchio never follows or terminates an unrelated ancestor to prevent that.
+
 ## Widgets are snapshots, not monitors
 
 WidgetKit controls refresh timing. Watchio writes one versioned snapshot atomically and asks WidgetKit to reload for material service/resource changes or a throttled freshness heartbeat. A widget shows freshness and moves to an offline state when its snapshot becomes stale. Keep the menu bar app running for collection; Watchio does not install a hidden LaunchAgent.
@@ -125,6 +145,7 @@ Watchio is designed so useful output does not require sensitive input:
 - There are no application network APIs, accounts, analytics, or update checks.
 - Docker collection refuses non-local CLI contexts, so discovery cannot contact a remote engine.
 - Subprocesses use fixed executable URLs, explicit arguments, timeouts, cancellation, and output limits—never shell interpolation.
+- Process signals are sent only after an explicit confirmation and same-user identity verification; there are no background or automatic process actions.
 - The collector app is nonsandboxed because macOS process inspection requires it; the widget is sandboxed. Release builds enable Hardened Runtime.
 
 Read [PRIVACY.md](PRIVACY.md), [SECURITY.md](SECURITY.md), and the [threat-conscious architecture](docs/architecture.md) before extending collection.
@@ -142,11 +163,14 @@ flowchart LR
   E --> I["AI identity + ancestry"]
   I --> M
   S --> M["Menu bar and Settings"]
+  M --> C["Confirmed process-tree stop"]
+  C --> P
+  C --> K["POSIX process signals"]
   S --> J["Atomic versioned snapshot"]
   J --> W["Sandboxed WidgetKit extension"]
 ```
 
-The dependency-free local Swift package separates `WatchioModels`, `WatchioDetection`, and `WatchioStorage`. Protocol boundaries make every external inventory source fixture-testable. See [Architecture](docs/architecture.md) and [ADR-0001](docs/adr/0001-native-observe-only.md).
+The dependency-free local Swift package separates `WatchioModels`, `WatchioDetection`, and `WatchioStorage`. Protocol boundaries make inventory and process signaling fixture-testable. See [Architecture](docs/architecture.md), [ADR-0001](docs/adr/0001-native-observe-only.md), and [ADR-0002](docs/adr/0002-safe-process-tree-control.md).
 
 ## Development
 
@@ -161,6 +185,10 @@ make check        # all required local checks
 
 Set `WATCHIO_RUN_INTEGRATION_TESTS=1` when running `swift test` to enable the real temporary-listener `ps`/`lsof` integration test. CI validates Xcode 16.2, Xcode 26.2, deterministic native UI flows, unsigned arm64 Release, coverage instrumentation, privacy invariants, formatting, and local documentation links.
 
+Set `WATCHIO_RUN_PROCESS_CONTROL_TESTS=1` only when you intentionally want to run the destructive
+integration test. It creates and stops its own disposable shell-and-sleep tree; it never selects an
+existing development process.
+
 ## Known limitations
 
 - Apple Silicon only; Intel is not a release target.
@@ -170,6 +198,7 @@ Set `WATCHIO_RUN_INTEGRATION_TESTS=1` when running `swift test` to enable the re
 - Service names are inferred without storing command arguments, so two identical runtimes in one process group may be grouped together.
 - AI activity is process-level, not conversation-level; internal desktop sessions are intentionally opaque.
 - AI tools implemented as generic `node` or `python` processes may be hidden rather than guessed from arguments.
+- Stop tree is irreversible. It targets the selected local PID tree, not Docker containers or an external supervisor that may launch a replacement.
 - The alpha is source-only and uses your local development team. There is no automatic updater.
 
 ## Roadmap

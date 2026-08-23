@@ -27,6 +27,9 @@ final class WatchioStorageTests: XCTestCase {
       try FileManager.default.contentsOfDirectory(atPath: directory.path),
       [WatchioSharedContainer.snapshotFilename]
     )
+    let attributes = try FileManager.default.attributesOfItem(
+      atPath: directory.appendingPathComponent(WatchioSharedContainer.snapshotFilename).path)
+    XCTAssertEqual((attributes[.posixPermissions] as? NSNumber)?.intValue, 0o600)
   }
 
   func testUnknownSnapshotSchemaFailsClosed() async throws {

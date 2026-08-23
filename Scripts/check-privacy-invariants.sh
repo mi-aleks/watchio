@@ -19,4 +19,16 @@ if rg -n 'ProcessInfo\.processInfo\.environment' Packages/WatchioCore/Sources/Wa
   exit 1
 fi
 
+signal_implementations="$(rg -l 'Darwin\.kill' WatchioApp WatchioWidget WatchioSharedUI Packages/WatchioCore/Sources || true)"
+unexpected_signal_implementations="$(printf '%s\n' "$signal_implementations" | rg -v 'Packages/WatchioCore/Sources/WatchioDetection/(CommandRunner|ProcessTreeTerminator)\.swift' || true)"
+if [[ -n "$unexpected_signal_implementations" ]]; then
+  echo "error: POSIX signaling escaped the audited command cleanup and process terminator" >&2
+  printf '%s\n' "$unexpected_signal_implementations" >&2
+  exit 1
+fi
+if ! rg -q 'Darwin\.kill' Packages/WatchioCore/Sources/WatchioDetection/ProcessTreeTerminator.swift; then
+  echo "error: the audited process-signaling boundary is missing" >&2
+  exit 1
+fi
+
 echo "Privacy invariants passed."

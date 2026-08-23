@@ -6,8 +6,12 @@
     "Detect supported local AI tools" : { "comment" : "Enables process-only AI activity detection" },
     "No AI activity" : { "comment" : "AI activity empty state title" },
     "No development services" : { "comment" : "Empty state title" },
+    "Process control" : { "comment" : "Title for process-control result alerts" },
     "RAM (RSS process tree)" : { "comment" : "Aggregate resident-memory label for an AI process tree" },
     "Scan now" : { "comment" : "Runs development service detection immediately" },
+    "Stop now" : { "comment" : "Confirms an irreversible process-tree stop" },
+    "Stop tree…" : { "comment" : "Opens confirmation for stopping a selected process tree" },
+    "Verified tree · TERM, then KILL survivors" : { "comment" : "Summary of the safe process-stop policy" },
     "Watchio recognizes supported AI tools from process identity, project, TTY, and ancestry." : { "comment" : "AI activity empty state explanation" },
     "Watchio only shows stable processes with strong development evidence." : { "comment" : "Detection empty state explanation" }
   },

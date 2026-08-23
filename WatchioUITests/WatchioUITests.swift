@@ -28,6 +28,24 @@ final class WatchioUITests: XCTestCase {
     XCTAssertTrue(claudeValue?.contains("RAM") == true)
   }
 
+  func testProcessTreeStopRequiresExplicitConfirmation() {
+    let app = launchApp(additionalArguments: ["--ai-mode"])
+    let activity = app.buttons["ai-activity-demo-ai-codex"]
+    XCTAssertTrue(activity.waitForExistence(timeout: 5))
+    activity.click()
+
+    let stopTree = app.buttons["stop-ai-demo-ai-codex"]
+    XCTAssertTrue(stopTree.waitForExistence(timeout: 3))
+    stopTree.click()
+
+    let alert = app.alerts["Stop Codex process tree?"]
+    XCTAssertTrue(alert.waitForExistence(timeout: 3))
+    XCTAssertTrue(alert.buttons["Stop now"].exists)
+    XCTAssertTrue(alert.buttons["Cancel"].exists)
+    alert.buttons["Cancel"].click()
+    XCTAssertTrue(alert.waitForNonExistence(timeout: 2))
+  }
+
   func testOnboardingDefaultActionCompletesIntroduction() {
     let app = launchApp(additionalArguments: ["--show-onboarding"])
 

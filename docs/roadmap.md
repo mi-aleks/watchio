@@ -1,6 +1,6 @@
 # Roadmap
 
-The roadmap protects Watchio's observe-only, local-first boundary. Dates are intentionally not promised.
+The roadmap protects Watchio's local-first, explicit-control boundary. Dates are intentionally not promised.
 
 ## 0.1 — trustworthy foundation
 
@@ -10,6 +10,7 @@ The roadmap protects Watchio's observe-only, local-first boundary. Dates are int
 - Small, Medium, and Large configurable widgets
 - Same-user Node/Bun/Deno, Go, Python, and Docker Compose detection
 - Process-only Codex, Claude, Gemini, Aider, OpenCode, Goose, Copilot, and Cursor Agent activity
+- Confirmed, same-user process-tree stop with graceful termination and verified force-kill fallback
 - Versioned latest-only snapshot, freshness, offline, and fail-closed states
 - Source-only public alpha and contributor documentation
 
@@ -30,7 +31,7 @@ The roadmap protects Watchio's observe-only, local-first boundary. Dates are int
 
 ## Not planned
 
-- Stopping or restarting processes
+- Automatic or bulk process termination, process restart, and Docker lifecycle control
 - Root helpers or Full Disk Access
 - Accounts, cloud sync, telemetry, or persisted activity history
 - Environment or raw command-line collection

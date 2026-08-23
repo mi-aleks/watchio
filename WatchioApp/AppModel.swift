@@ -24,13 +24,17 @@ final class AppModel {
   var selectedServiceID: String?
   var selectedAIActivityID: String?
   var lastError: String?
+  var processControlNotice: String?
   var isScanning = false
+  private(set) var stoppingProcessID: Int32?
   private(set) var hasCompletedOnboarding: Bool
 
   private let engine: DetectionEngine
+  private let processTerminator: ProcessTreeTerminator
   private let snapshotStore: any SnapshotStoring
   private let preferencesStore: DetectionPreferencesStore
   private let appDefaults: UserDefaults
+  private let demoMode: Bool
   private var scanTask: Task<Void, Never>?
   private var lastWidgetSignature = ""
   private var lastWidgetReloadAt: Date = .distantPast
@@ -39,13 +43,16 @@ final class AppModel {
     demoMode: Bool = ProcessInfo.processInfo.arguments.contains("--demo-data"),
     showOnboarding: Bool = ProcessInfo.processInfo.arguments.contains("--show-onboarding"),
     engine: DetectionEngine = DetectionEngine(),
+    processTerminator: ProcessTreeTerminator = ProcessTreeTerminator(),
     snapshotStore: any SnapshotStoring = JSONSnapshotStore(),
     preferencesStore: DetectionPreferencesStore? = nil,
     appDefaults: UserDefaults = .standard
   ) {
     self.engine = engine
+    self.processTerminator = processTerminator
     self.snapshotStore = snapshotStore
     self.appDefaults = appDefaults
+    self.demoMode = demoMode
     let store = preferencesStore ?? Self.makePreferencesStore()
     self.preferencesStore = store
     preferences = store.load()
@@ -153,6 +160,28 @@ final class AppModel {
     }
   }
 
+  func isStopping(processID: Int32) -> Bool {
+    stoppingProcessID == processID
+  }
+
+  func stopProcessTree(for service: DetectedService) async {
+    guard let processID = service.representativePID,
+      let startedAt = service.representativeStartedAt
+    else { return }
+    await stopProcessTree(
+      target: ProcessTerminationTarget(
+        representativePID: processID, representativeStartedAt: startedAt),
+      displayName: service.name)
+  }
+
+  func stopProcessTree(for activity: DetectedAIActivity) async {
+    await stopProcessTree(
+      target: ProcessTerminationTarget(
+        representativePID: activity.representativePID,
+        representativeStartedAt: activity.representativeStartedAt),
+      displayName: activity.tool.displayName)
+  }
+
   func addProjectRoot(_ path: String) {
     guard !preferences.projectRoots.contains(path) else { return }
     preferences.projectRoots.append(path)
@@ -232,6 +261,37 @@ final class AppModel {
   private func normalizedRule(_ rawRule: String) -> String? {
     let rule = rawRule.trimmingCharacters(in: .whitespacesAndNewlines)
     return rule.isEmpty ? nil : rule
+  }
+
+  private func stopProcessTree(target: ProcessTerminationTarget, displayName: String) async {
+    guard stoppingProcessID == nil else { return }
+    if demoMode {
+      processControlNotice = "Demo mode never sends process signals."
+      return
+    }
+
+    stoppingProcessID = target.representativePID
+    defer { stoppingProcessID = nil }
+    do {
+      let result = try await processTerminator.terminate(target)
+      if result.survivingProcessCount > 0 {
+        processControlNotice =
+          "Watchio stopped \(result.terminatedProcessCount) verified processes in the \(displayName) tree, but \(result.survivingProcessCount) still appear alive. Unverified PIDs were not sent SIGTERM or SIGKILL."
+      } else if result.forceKilledProcessCount > 0 {
+        processControlNotice =
+          "Stopped \(result.terminatedProcessCount) verified processes in the \(displayName) tree. \(result.forceKilledProcessCount) required SIGKILL after the grace period."
+      } else {
+        processControlNotice =
+          "Stopped \(result.terminatedProcessCount) verified processes in the \(displayName) tree gracefully."
+      }
+    } catch {
+      processControlNotice =
+        (error as? LocalizedError)?.errorDescription
+        ?? "Watchio could not safely stop the selected process tree."
+    }
+
+    try? await Task.sleep(for: .milliseconds(250))
+    await scanNow()
   }
 
   private static let onboardingKey = "watchio.onboarding-complete.v1"

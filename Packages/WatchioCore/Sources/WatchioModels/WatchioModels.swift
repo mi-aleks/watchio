@@ -65,13 +65,15 @@ public struct DetectedService: Codable, Hashable, Identifiable, Sendable {
   public let cpuPercent: Double?
   public let memoryBytes: UInt64?
   public let startedAt: Date?
+  public let representativeStartedAt: Date?
   public let confidence: Int
   public let evidence: [ConfidenceEvidence]
 
   public init(
     id: String, name: String, projectName: String, projectPath: String?, runtime: RuntimeKind,
     representativePID: Int32?, processCount: Int, ports: [ListeningEndpoint], cpuPercent: Double?,
-    memoryBytes: UInt64?, startedAt: Date?, confidence: Int, evidence: [ConfidenceEvidence]
+    memoryBytes: UInt64?, startedAt: Date?, representativeStartedAt: Date? = nil, confidence: Int,
+    evidence: [ConfidenceEvidence]
   ) {
     self.id = id
     self.name = name
@@ -84,6 +86,8 @@ public struct DetectedService: Codable, Hashable, Identifiable, Sendable {
     self.cpuPercent = cpuPercent
     self.memoryBytes = memoryBytes
     self.startedAt = startedAt
+    self.representativeStartedAt =
+      representativePID == nil ? nil : representativeStartedAt ?? startedAt
     self.confidence = confidence
     self.evidence = evidence
   }
@@ -158,14 +162,15 @@ public struct DetectedAIActivity: Codable, Hashable, Identifiable, Sendable {
   public let cpuPercent: Double
   public let memoryBytes: UInt64
   public let startedAt: Date
+  public let representativeStartedAt: Date
   public let confidence: Int
   public let evidence: [AIActivityEvidence]
 
   public init(
     id: String, tool: AIToolKind, host: AIActivityHost, projectName: String?,
     projectPath: String?, representativePID: Int32, processCount: Int, tty: String?,
-    cpuPercent: Double, memoryBytes: UInt64, startedAt: Date, confidence: Int,
-    evidence: [AIActivityEvidence]
+    cpuPercent: Double, memoryBytes: UInt64, startedAt: Date,
+    representativeStartedAt: Date? = nil, confidence: Int, evidence: [AIActivityEvidence]
   ) {
     self.id = id
     self.tool = tool
@@ -178,6 +183,7 @@ public struct DetectedAIActivity: Codable, Hashable, Identifiable, Sendable {
     self.cpuPercent = cpuPercent
     self.memoryBytes = memoryBytes
     self.startedAt = startedAt
+    self.representativeStartedAt = representativeStartedAt ?? startedAt
     self.confidence = confidence
     self.evidence = evidence
   }
@@ -219,7 +225,7 @@ public struct ReviewSuggestion: Codable, Hashable, Identifiable, Sendable {
 }
 
 public struct WatchioSnapshot: Codable, Hashable, Sendable {
-  public static let currentSchemaVersion = 2
+  public static let currentSchemaVersion = 3
   public let schemaVersion: Int
   public let generatedAt: Date
   public let collectorState: CollectorState

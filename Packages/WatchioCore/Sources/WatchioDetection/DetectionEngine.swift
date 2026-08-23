@@ -169,6 +169,7 @@ public struct DetectionEngine: Sendable {
         cpuPercent: members.reduce(0) { $0 + $1.cpuPercent },
         memoryBytes: members.reduce(0) { $0 + $1.memoryBytes },
         startedAt: now().addingTimeInterval(-elapsed),
+        representativeStartedAt: now().addingTimeInterval(-root.process.elapsedSeconds),
         confidence: root.classification.confidence,
         evidence: root.classification.evidence
       )
@@ -252,6 +253,8 @@ public struct DetectionEngine: Sendable {
       cpuPercent: memberProcesses.reduce(0) { $0 + $1.cpuPercent },
       memoryBytes: memberProcesses.reduce(0) { $0 + $1.memoryBytes },
       startedAt: now().addingTimeInterval(-earliestElapsed),
+      representativeStartedAt: now().addingTimeInterval(
+        -representative.process.elapsedSeconds),
       confidence: confidence,
       evidence: evidence
     )
