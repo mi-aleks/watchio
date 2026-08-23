@@ -5,11 +5,11 @@ import WatchioStorage
 import WidgetKit
 
 enum WidgetViewMode: String, AppEnum {
-  case services, ports, health
+  case services, ai, ports, health
 
   static let typeDisplayRepresentation = TypeDisplayRepresentation(name: "View")
   static let caseDisplayRepresentations: [Self: DisplayRepresentation] = [
-    .services: "Services", .ports: "Ports", .health: "Health",
+    .services: "Services", .ai: "AI activity", .ports: "Ports", .health: "Health",
   ]
 }
 
@@ -150,6 +150,16 @@ struct WatchioWidgetView: View {
     }
   }
 
+  private var aiActivities: [DetectedAIActivity] {
+    guard entry.configuration.projectScope == .single,
+      let name = entry.configuration.projectName?.trimmingCharacters(in: .whitespacesAndNewlines),
+      !name.isEmpty
+    else { return entry.snapshot.aiActivities }
+    return entry.snapshot.aiActivities.filter {
+      $0.projectName?.localizedCaseInsensitiveCompare(name) == .orderedSame
+    }
+  }
+
   private var isOffline: Bool {
     entry.snapshot.isStale(referenceDate: entry.date, threshold: 30)
       || entry.snapshot.collectorState == .offline
@@ -163,10 +173,52 @@ struct WatchioWidgetView: View {
       } else {
         serviceList(limit: family == .systemLarge ? 4 : 3)
       }
+    case .ai:
+      if family == .systemSmall {
+        smallAIActivity
+      } else {
+        aiActivityList(limit: family == .systemLarge ? 4 : 3)
+      }
     case .ports:
       portList
     case .health:
       healthView
+    }
+  }
+
+  private var smallAIActivity: some View {
+    VStack(spacing: 0) {
+      widgetHeader
+      Spacer()
+      ZStack {
+        Circle()
+          .fill(
+            RadialGradient(
+              colors: [Color.purple.opacity(0.18), .clear], center: .center, startRadius: 0,
+              endRadius: 42)
+          )
+        Circle().stroke(Color.purple.opacity(0.25), lineWidth: 1)
+        VStack(spacing: 1) {
+          Text(aiActivities.count, format: .number)
+            .font(.system(size: 28, weight: .medium, design: .monospaced))
+            .foregroundStyle(Color(red: 0.85, green: 0.76, blue: 1))
+          Text("AI ACTIVE")
+            .font(.system(size: 7.5, weight: .bold, design: .rounded))
+            .tracking(0.9)
+            .foregroundStyle(WatchioPalette.secondaryText)
+        }
+      }
+      .frame(width: 76, height: 76)
+      Spacer()
+      Text(aiActivities.isEmpty ? "No AI activity" : aiProjectSummary)
+        .font(.system(size: 11, weight: .semibold))
+        .lineLimit(1)
+      HStack(spacing: 5) {
+        ForEach(Array(aiActivities.prefix(3))) { activity in
+          AIToolGlyph(tool: activity.tool, size: 20)
+        }
+      }
+      .frame(height: 22)
     }
   }
 
@@ -224,6 +276,20 @@ struct WatchioWidgetView: View {
       }
       Spacer(minLength: 0)
       if family == .systemLarge { aggregateFooter }
+    }
+  }
+
+  private func aiActivityList(limit: Int) -> some View {
+    VStack(alignment: .leading, spacing: family == .systemLarge ? 7 : 4) {
+      widgetHeader
+      ForEach(Array(aiActivities.prefix(limit))) { activity in
+        WidgetAIActivityRow(activity: activity, expanded: family == .systemLarge)
+      }
+      if aiActivities.isEmpty {
+        Text("No AI activity").font(.caption).foregroundStyle(WatchioPalette.secondaryText)
+      }
+      Spacer(minLength: 0)
+      if family == .systemLarge { aiAggregateFooter }
     }
   }
 
@@ -288,9 +354,9 @@ struct WatchioWidgetView: View {
       WatchioMark(compact: true)
       if family != .systemSmall {
         VStack(alignment: .leading, spacing: 1) {
-          Text("Local development")
+          Text(entry.configuration.viewMode == .ai ? "AI activity" : "Local development")
             .font(.system(size: 11, weight: .semibold))
-          Text("\(services.count) running · all projects")
+          Text(headerSubtitle)
             .font(.system(size: 8.5))
             .foregroundStyle(WatchioPalette.secondaryText)
         }
@@ -301,6 +367,21 @@ struct WatchioWidgetView: View {
         .foregroundStyle(WatchioPalette.secondaryText)
         .monospacedDigit()
     }
+  }
+
+  private var headerSubtitle: String {
+    if entry.configuration.viewMode == .ai {
+      return "\(aiActivities.count) active · \(aiProjectCount) projects"
+    }
+    return "\(services.count) running · all projects"
+  }
+
+  private var aiProjectCount: Int {
+    Set(aiActivities.compactMap(\.projectName)).count
+  }
+
+  private var aiProjectSummary: String {
+    aiProjectCount == 1 ? "1 project" : "\(aiProjectCount) projects"
   }
 
   private var aggregateFooter: some View {
@@ -319,6 +400,26 @@ struct WatchioWidgetView: View {
       MiniTrend(samples: entry.trend)
         .frame(width: 86, height: 34)
         .accessibilityLabel("Recent in-memory CPU activity")
+    }
+    .padding(10)
+    .background(WatchioPalette.card, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+    .overlay {
+      RoundedRectangle(cornerRadius: 12, style: .continuous)
+        .stroke(WatchioPalette.cardBorder, lineWidth: 1)
+    }
+  }
+
+  private var aiAggregateFooter: some View {
+    HStack {
+      metric("CPU", String(format: "%.1f%%", aiActivities.map(\.cpuPercent).reduce(0, +)))
+      metric(
+        "Memory",
+        ByteCountFormatter.string(
+          fromByteCount: Int64(aiActivities.map(\.memoryBytes).reduce(0, +)),
+          countStyle: .memory
+        ))
+      metric("Processes", String(aiActivities.map(\.processCount).reduce(0, +)))
+      metric("Projects", String(aiProjectCount))
     }
     .padding(10)
     .background(WatchioPalette.card, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
@@ -406,6 +507,55 @@ private struct WidgetServiceRow: View {
 
   private func widgetUptime(_ service: DetectedService) -> String {
     guard let value = service.uptime() else { return "—" }
+    if value >= 3_600 { return "\(Int(value / 3_600))h" }
+    return "\(max(1, Int(value / 60)))m"
+  }
+}
+
+private struct WidgetAIActivityRow: View {
+  let activity: DetectedAIActivity
+  let expanded: Bool
+
+  var body: some View {
+    Link(destination: URL(string: "watchio://ai/\(activity.id)")!) {
+      HStack(spacing: expanded ? 9 : 7) {
+        AIToolGlyph(tool: activity.tool, size: expanded ? 34 : 26)
+        VStack(alignment: .leading, spacing: expanded ? 2 : 0) {
+          HStack(spacing: 5) {
+            Text(activity.tool.displayName)
+              .font(.system(size: expanded ? 11 : 9.5, weight: .semibold))
+              .lineLimit(1)
+            Circle()
+              .fill(WatchioPalette.accentSoft)
+              .frame(width: 4, height: 4)
+          }
+          Text(activity.projectName ?? "No project context")
+            .font(.system(size: expanded ? 8.5 : 7.5))
+            .foregroundStyle(WatchioPalette.secondaryText)
+            .lineLimit(1)
+        }
+        Spacer()
+        Text(activity.host.displayName)
+          .font(.system(size: expanded ? 8 : 7.5, weight: .medium, design: .rounded))
+          .foregroundStyle(.white.opacity(0.68))
+        Text(widgetUptime(activity))
+          .font(.system(size: expanded ? 8.5 : 7.5, design: .monospaced))
+          .foregroundStyle(WatchioPalette.secondaryText)
+          .frame(width: expanded ? 34 : 27, alignment: .trailing)
+      }
+      .padding(.horizontal, expanded ? 9 : 6)
+      .padding(.vertical, expanded ? 6 : 2)
+      .background(WatchioPalette.card, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+      .overlay {
+        RoundedRectangle(cornerRadius: 10, style: .continuous)
+          .stroke(WatchioPalette.cardBorder, lineWidth: 1)
+      }
+    }
+    .buttonStyle(.plain)
+  }
+
+  private func widgetUptime(_ activity: DetectedAIActivity) -> String {
+    let value = activity.uptime()
     if value >= 3_600 { return "\(Int(value / 3_600))h" }
     return "\(max(1, Int(value / 60)))m"
   }

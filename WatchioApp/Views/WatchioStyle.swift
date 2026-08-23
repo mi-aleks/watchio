@@ -23,4 +23,16 @@ enum WatchioFormat {
     guard let bytes else { return "—" }
     return ByteCountFormatter.string(fromByteCount: Int64(bytes), countStyle: .memory)
   }
+
+  static func uptime(_ activity: DetectedAIActivity, now: Date = .now) -> String {
+    duration(activity.uptime(referenceDate: now))
+  }
+
+  private static func duration(_ seconds: TimeInterval) -> String {
+    let formatter = DateComponentsFormatter()
+    formatter.unitsStyle = .abbreviated
+    formatter.allowedUnits = seconds >= 3_600 ? [.hour, .minute] : [.minute, .second]
+    formatter.maximumUnitCount = 2
+    return formatter.string(from: seconds) ?? "—"
+  }
 }

@@ -23,6 +23,7 @@ struct MenuBarContentView: View {
       Group {
         switch model.selectedMode {
         case .services: services
+        case .ai: aiActivity
         case .ports: ports
         case .health: health
         }
@@ -99,8 +100,12 @@ struct MenuBarContentView: View {
   }
 
   private var statusText: String {
-    let count = model.snapshot.services.count
-    return count == 1 ? "1 development service" : "\(count) development services"
+    let services = model.snapshot.services.count
+    let ai = model.snapshot.aiActivities.count
+    if ai == 0 {
+      return services == 1 ? "1 development service" : "\(services) development services"
+    }
+    return "\(services) services · \(ai) AI active"
   }
 
   private var services: some View {
@@ -112,6 +117,25 @@ struct MenuBarContentView: View {
             model.selectedServiceID = model.selectedServiceID == service.id ? nil : service.id
           }
           if model.selectedServiceID == service.id { ServiceDetail(service: service) }
+        }
+      }
+      .padding(12)
+    }
+    .scrollIndicators(.hidden)
+  }
+
+  private var aiActivity: some View {
+    ScrollView {
+      LazyVStack(spacing: 6) {
+        if model.snapshot.aiActivities.isEmpty { aiEmptyState }
+        ForEach(model.snapshot.aiActivities) { activity in
+          AIActivityRow(
+            activity: activity, selected: model.selectedAIActivityID == activity.id
+          ) {
+            model.selectedAIActivityID =
+              model.selectedAIActivityID == activity.id ? nil : activity.id
+          }
+          if model.selectedAIActivityID == activity.id { AIActivityDetail(activity: activity) }
         }
       }
       .padding(12)
@@ -192,6 +216,16 @@ struct MenuBarContentView: View {
     )
   }
 
+  private var aiEmptyState: some View {
+    ContentUnavailableView(
+      "No AI activity",
+      systemImage: "sparkles",
+      description: Text(
+        "Watchio recognizes supported AI tools from process identity, project, TTY, and ancestry."
+      )
+    )
+  }
+
   private var footer: some View {
     HStack {
       Circle()
@@ -212,6 +246,100 @@ struct MenuBarContentView: View {
     .font(.system(size: 11, weight: .medium))
     .foregroundStyle(Color.white.opacity(0.78))
     .padding(13)
+  }
+}
+
+private struct AIActivityRow: View {
+  let activity: DetectedAIActivity
+  let selected: Bool
+  let action: () -> Void
+
+  var body: some View {
+    Button(action: action) {
+      HStack(spacing: 10) {
+        AIToolGlyph(tool: activity.tool, size: 38)
+        VStack(alignment: .leading, spacing: 2) {
+          HStack(spacing: 6) {
+            Text(activity.tool.displayName)
+              .font(.system(size: 13, weight: .semibold))
+              .lineLimit(1)
+            Circle()
+              .fill(WatchioPalette.accentSoft)
+              .frame(width: 5, height: 5)
+              .shadow(color: WatchioPalette.accentSoft.opacity(0.55), radius: 3)
+          }
+          Text(contextLabel)
+            .font(.system(size: 10))
+            .foregroundStyle(WatchioPalette.secondaryText)
+            .lineLimit(1)
+        }
+        Spacer()
+        Text(activity.host.displayName)
+          .font(.system(size: 9, weight: .medium, design: .rounded))
+          .foregroundStyle(.white.opacity(0.68))
+          .padding(.horizontal, 7)
+          .padding(.vertical, 4)
+          .background(Color.white.opacity(0.045), in: RoundedRectangle(cornerRadius: 7))
+        Text(WatchioFormat.uptime(activity))
+          .font(.system(size: 10, design: .monospaced))
+          .foregroundStyle(WatchioPalette.secondaryText)
+          .frame(width: 44, alignment: .trailing)
+        Image(systemName: selected ? "chevron.up" : "chevron.down")
+          .font(.system(size: 8, weight: .bold))
+          .foregroundStyle(WatchioPalette.tertiaryText)
+      }
+      .padding(10)
+      .contentShape(Rectangle())
+    }
+    .buttonStyle(.plain)
+    .background(
+      selected ? Color.white.opacity(0.075) : WatchioPalette.card,
+      in: RoundedRectangle(cornerRadius: 13, style: .continuous)
+    )
+    .overlay {
+      RoundedRectangle(cornerRadius: 13, style: .continuous)
+        .stroke(selected ? Color.white.opacity(0.13) : WatchioPalette.cardBorder, lineWidth: 1)
+    }
+    .accessibilityValue("\(activity.tool.displayName), \(activity.host.displayName)")
+    .accessibilityIdentifier("ai-activity-\(activity.id)")
+  }
+
+  private var contextLabel: String {
+    let project = activity.projectPath ?? activity.projectName ?? "No project context"
+    guard let tty = activity.tty else { return project }
+    return "\(project) · \(tty)"
+  }
+}
+
+private struct AIActivityDetail: View {
+  let activity: DetectedAIActivity
+
+  var body: some View {
+    Grid(alignment: .leading, horizontalSpacing: 14, verticalSpacing: 6) {
+      detail("PID", String(activity.representativePID))
+      detail("Processes", String(activity.processCount))
+      detail("CPU", String(format: "%.1f%%", activity.cpuPercent))
+      detail("Memory", WatchioFormat.bytes(activity.memoryBytes))
+      detail("Host", activity.host.displayName)
+      detail("Confidence", "\(activity.confidence)%")
+      GridRow {
+        Text("Evidence").foregroundStyle(.secondary)
+        Text(activity.evidence.map(\.displayName).joined(separator: " · ")).lineLimit(3)
+      }
+    }
+    .font(.caption)
+    .foregroundStyle(.white.opacity(0.82))
+    .padding(11)
+    .background(Color.black.opacity(0.14), in: RoundedRectangle(cornerRadius: 11))
+    .padding(.horizontal, 4)
+    .padding(.bottom, 4)
+  }
+
+  private func detail(_ label: String, _ value: String) -> some View {
+    GridRow {
+      Text(label).foregroundStyle(.secondary)
+      Text(value).textSelection(.enabled)
+    }
   }
 }
 

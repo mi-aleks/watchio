@@ -4,12 +4,12 @@ set -euo pipefail
 models="Packages/WatchioCore/Sources/WatchioModels/WatchioModels.swift"
 persisted_shape="$(sed -n '/public struct DetectedService:/,/public enum InventorySource:/p' "$models")"
 
-if rg -i 'environment|command(line)?|arguments|executablePath|rootPath' <<<"$persisted_shape"; then
-  echo "error: a sensitive field entered the persisted DetectedService model" >&2
+if rg -i 'environment|command(line)?|arguments|executablePath|rootPath|prompt|response|conversation|transcript|session(title|name)|task(title|name)' <<<"$persisted_shape"; then
+  echo "error: a sensitive field entered a persisted snapshot model" >&2
   exit 1
 fi
 
-if rg -n 'URLSession|NSURLConnection|NWConnection' WatchioApp WatchioWidget Packages/WatchioCore/Sources; then
+if rg -n 'URLSession|NSURLConnection|NWConnection' WatchioApp WatchioWidget WatchioSharedUI Packages/WatchioCore/Sources; then
   echo "error: outbound networking API found in Watchio production sources" >&2
   exit 1
 fi

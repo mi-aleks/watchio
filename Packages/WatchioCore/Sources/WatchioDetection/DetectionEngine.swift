@@ -41,15 +41,21 @@ public struct DetectionEngine: Sendable {
     let listenerPIDs = Set(tcpListeners.map(\.pid))
     let processByPID = Dictionary(uniqueKeysWithValues: processes.map { ($0.pid, $0) })
 
-    let candidates = processes.filter {
+    let serviceCandidates = processes.filter {
       ProcessClassifier.runtime(for: $0) != nil || listenerPIDs.contains($0.pid)
     }
+    let aiCandidates =
+      preferences.observeAIActivity
+      ? processes.filter { AIProcessClassifier.tool(for: $0) != nil } : []
+    let projectCandidates = Array(
+      Dictionary(uniqueKeysWithValues: (serviceCandidates + aiCandidates).map { ($0.pid, $0) })
+        .values)
     let projectsResult = await capture {
-      try await projectResolver.projects(for: candidates, roots: preferences.projectRoots)
+      try await projectResolver.projects(for: projectCandidates, roots: preferences.projectRoots)
     }
     let projects = (try? projectsResult.get()) ?? [:]
 
-    let qualified = candidates.compactMap { process -> QualifiedProcess? in
+    let qualified = serviceCandidates.compactMap { process -> QualifiedProcess? in
       let classification = ProcessClassifier.classify(
         process: process,
         project: projects[process.pid],
@@ -100,10 +106,18 @@ public struct DetectionEngine: Sendable {
       services.append(contentsOf: containers.map(makeContainerService))
     }
 
+    let aiActivities =
+      preferences.observeAIActivity
+      ? makeAIActivities(
+        candidates: aiCandidates, allProcesses: processes, projects: projects,
+        processByPID: processByPID)
+      : []
+
     services.sort(by: serviceSort)
     suggestions.sort { serviceSort($0.service, $1.service) }
     return DetectionResult(
       services: services,
+      aiActivities: aiActivities,
       reviewSuggestions: suggestions,
       sourceHealth: [
         health(.processes, result: processesResult),
@@ -112,6 +126,80 @@ public struct DetectionEngine: Sendable {
         health(.docker, result: containersResult, optional: true),
       ]
     )
+  }
+
+  private func makeAIActivities(
+    candidates: [ProcessRecord], allProcesses: [ProcessRecord], projects: [Int32: ProjectContext],
+    processByPID: [Int32: ProcessRecord]
+  ) -> [DetectedAIActivity] {
+    let qualified = candidates.compactMap { process -> QualifiedAIProcess? in
+      guard
+        let classification = AIProcessClassifier.classify(
+          process: process, project: projects[process.pid], processByPID: processByPID),
+        classification.confidence >= 60
+      else { return nil }
+      return QualifiedAIProcess(
+        process: process, project: projects[process.pid], classification: classification)
+    }
+    let rootPIDs = Set(qualified.map(\.process.pid))
+    var membersByRoot: [Int32: [ProcessRecord]] = [:]
+    for process in allProcesses {
+      guard
+        let rootPID = nearestAIRoot(
+          for: process, rootPIDs: rootPIDs, processByPID: processByPID)
+      else { continue }
+      membersByRoot[rootPID, default: []].append(process)
+    }
+
+    return qualified.map { root in
+      let members = membersByRoot[root.process.pid] ?? [root.process]
+      let elapsed = members.map(\.elapsedSeconds).max() ?? root.process.elapsedSeconds
+      return DetectedAIActivity(
+        id: StableIdentifier.make([
+          "ai", root.classification.tool.rawValue, String(root.process.pid),
+          String(root.process.processGroupID), root.project?.rootPath ?? "",
+        ]),
+        tool: root.classification.tool,
+        host: root.classification.host,
+        projectName: root.project?.name,
+        projectPath: root.project?.displayPath,
+        representativePID: root.process.pid,
+        processCount: members.count,
+        tty: root.process.tty,
+        cpuPercent: members.reduce(0) { $0 + $1.cpuPercent },
+        memoryBytes: members.reduce(0) { $0 + $1.memoryBytes },
+        startedAt: now().addingTimeInterval(-elapsed),
+        confidence: root.classification.confidence,
+        evidence: root.classification.evidence
+      )
+    }.sorted(by: aiActivitySort)
+  }
+
+  private func nearestAIRoot(
+    for process: ProcessRecord, rootPIDs: Set<Int32>, processByPID: [Int32: ProcessRecord],
+    maximumDepth: Int = 48
+  ) -> Int32? {
+    var current = process
+    var visited: Set<Int32> = []
+    for _ in 0..<maximumDepth {
+      guard visited.insert(current.pid).inserted else { return nil }
+      if rootPIDs.contains(current.pid) { return current.pid }
+      guard let parent = processByPID[current.parentPID] else { return nil }
+      current = parent
+    }
+    return nil
+  }
+
+  private func aiActivitySort(_ lhs: DetectedAIActivity, _ rhs: DetectedAIActivity) -> Bool {
+    if lhs.tool.displayName != rhs.tool.displayName {
+      return lhs.tool.displayName.localizedCaseInsensitiveCompare(rhs.tool.displayName)
+        == .orderedAscending
+    }
+    if lhs.projectName != rhs.projectName {
+      return (lhs.projectName ?? "").localizedCaseInsensitiveCompare(rhs.projectName ?? "")
+        == .orderedAscending
+    }
+    return lhs.id < rhs.id
   }
 
   private func groupKey(_ item: QualifiedProcess) -> String {
@@ -247,4 +335,10 @@ private struct QualifiedProcess: Sendable {
   let process: ProcessRecord
   let project: ProjectContext?
   let classification: Classification
+}
+
+private struct QualifiedAIProcess: Sendable {
+  let process: ProcessRecord
+  let project: ProjectContext?
+  let classification: AIProcessClassification
 }

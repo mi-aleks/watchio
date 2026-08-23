@@ -51,6 +51,54 @@ struct WatchioMark: View {
   }
 }
 
+struct AIToolGlyph: View {
+  let tool: AIToolKind
+  var size: CGFloat = 34
+
+  var body: some View {
+    ZStack {
+      RoundedRectangle(cornerRadius: size * 0.29, style: .continuous)
+        .fill(tint.opacity(0.13))
+      RoundedRectangle(cornerRadius: size * 0.29, style: .continuous)
+        .stroke(tint.opacity(0.25), lineWidth: 1)
+      Image(systemName: symbol)
+        .symbolRenderingMode(.monochrome)
+        .font(.system(size: size * 0.43, weight: .semibold))
+        .foregroundStyle(tint)
+    }
+    .frame(width: size, height: size)
+    .accessibilityElement(children: .ignore)
+    .accessibilityLabel("\(tool.displayName) AI tool")
+    .accessibilityIdentifier("ai-icon-\(tool.rawValue)")
+  }
+
+  private var symbol: String {
+    switch tool {
+    case .codex: "cube.transparent.fill"
+    case .claude: "asterisk"
+    case .gemini: "sparkles"
+    case .aider: "wand.and.stars"
+    case .openCode: "chevron.left.forwardslash.chevron.right"
+    case .goose: "bird.fill"
+    case .copilot: "person.2.fill"
+    case .cursor: "cursorarrow.rays"
+    }
+  }
+
+  private var tint: Color {
+    switch tool {
+    case .codex: WatchioPalette.accent
+    case .claude: Color(red: 0.95, green: 0.57, blue: 0.36)
+    case .gemini: Color(red: 0.48, green: 0.68, blue: 0.98)
+    case .aider: Color(red: 0.76, green: 0.59, blue: 0.98)
+    case .openCode: Color(red: 0.43, green: 0.87, blue: 0.58)
+    case .goose: Color(red: 0.96, green: 0.7, blue: 0.36)
+    case .copilot: Color.white.opacity(0.76)
+    case .cursor: Color(red: 0.38, green: 0.82, blue: 0.91)
+    }
+  }
+}
+
 struct RuntimeGlyph: View {
   let runtime: RuntimeKind
   var serviceName = ""

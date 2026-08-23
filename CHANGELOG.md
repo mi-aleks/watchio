@@ -4,6 +4,13 @@ All notable changes follow [Keep a Changelog](https://keepachangelog.com/en/1.1.
 
 ## [Unreleased]
 
+### Added
+
+- Added a process-only AI activity view and widget mode for Codex, Claude, Gemini CLI, Aider,
+  OpenCode, Goose, GitHub Copilot CLI, and Cursor Agent.
+- Added host classification for CLI, VS Code, desktop, background, and separately executable
+  subagent processes, with descendant resource aggregation and explainable confidence evidence.
+
 ### Changed
 
 - Reworked the menu bar and every widget family around the darker, denser visual language from

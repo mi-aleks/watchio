@@ -18,7 +18,7 @@ There are no runtime dependencies and no generated project. `Watchio.xcodeproj` 
 
 1. `AppModel` asks `DetectionEngine` to scan every ten seconds.
 2. Providers inventory process metadata and TCP listeners, resolve candidates, then inspect UDP only for qualified service process groups. Compose inspection accepts local Docker CLI contexts only.
-3. The engine filters by current UID and three-second stability, classifies candidates, and groups process trees into logical services.
+3. The engine filters by current UID and three-second stability. One process inventory feeds both development-service classification and the separate AI identity/ancestry classifier.
 4. The app renders the result and atomically replaces the latest redacted snapshot.
 5. WidgetKit loads that snapshot, applies its view/scope configuration, and renders a freshness or fail-closed state.
 
@@ -36,7 +36,12 @@ Tests inject deterministic providers. The production runner never invokes a shel
 
 ## Storage contract
 
-`WatchioSnapshot` schema version 1 contains generated time, collector state, services, review suggestions, and source health. A service contains only display-safe project path, normalized listeners, aggregate resources, representative PID, process count, start time, confidence, and non-sensitive evidence.
+`WatchioSnapshot` schema version 2 contains generated time, collector state, services, AI activities,
+review suggestions, and source health. A service contains only display-safe project path,
+normalized listeners, aggregate resources, representative PID, process count, start time,
+confidence, and non-sensitive evidence. An AI activity contains the recognized tool and host plus
+the same bounded process/resource metadata; it contains no prompt, conversation, task, or raw
+command data.
 
 Raw arguments, environment values, full home paths, executable paths, CWDs, and Docker inspection payloads cannot enter the persisted service shape. The snapshot store keeps one file with owner-only permissions. An unsupported schema produces Update Required, never a best-effort decode.
 
@@ -49,6 +54,7 @@ Both targets share `$(DEVELOPMENT_TEAM).io.github.mi-aleks.watchio.shared`, a te
 ## Trade-offs
 
 - Avoiding arguments and environment data protects secrets but limits exact service naming.
+- Process-only AI classification cannot distinguish logical agents multiplexed in one host or generic script runners.
 - Conservative scoring creates occasional Review items but reduces surprising GUI/system false positives.
 - Snapshot-only widgets can be stale because WidgetKit owns scheduling; the app is the authoritative live view.
 - Docker collection fails closed when the active CLI context is not a local Unix socket.

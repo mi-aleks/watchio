@@ -4,11 +4,12 @@ The roadmap protects Watchio's observe-only, local-first boundary. Dates are int
 
 ## 0.1 — trustworthy foundation
 
-- Native menu bar Services, Ports, and Health
+- Native menu bar Services, AI, Ports, and Health
 - Settings for login opt-in, roots, runtimes, Review, Widget, Privacy, and About
 - Native include/ignore glob rule editor
 - Small, Medium, and Large configurable widgets
 - Same-user Node/Bun/Deno, Go, Python, and Docker Compose detection
+- Process-only Codex, Claude, Gemini, Aider, OpenCode, Goose, Copilot, and Cursor Agent activity
 - Versioned latest-only snapshot, freshness, offline, and fail-closed states
 - Source-only public alpha and contributor documentation
 
@@ -33,6 +34,7 @@ The roadmap protects Watchio's observe-only, local-first boundary. Dates are int
 - Root helpers or Full Disk Access
 - Accounts, cloud sync, telemetry, or persisted activity history
 - Environment or raw command-line collection
+- Prompt, conversation, task-title, or agent-transcript collection
 - A hidden launch daemon
 
 Proposals that cross these boundaries require a public ADR and maintainer approval before implementation.
