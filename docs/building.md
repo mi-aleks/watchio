@@ -26,10 +26,25 @@ make format-check
 make test
 make ui-test
 make build
+make install-check
 make check
 ```
 
 `make build` disables signing and writes Derived Data under `.build/Xcode`. `make ui-test` uses local ad-hoc signing and needs an interactive macOS session. Override `DERIVED_DATA` or `DESTINATION` when needed.
+
+## Local install
+
+```bash
+make install
+```
+
+The installer verifies macOS and Apple Silicon, creates an ad-hoc-signed Release build, validates the
+app and embedded widget, installs it to `~/Applications/Watchio.app`, and opens it. It does not use
+`sudo` or change Gatekeeper. Re-running the command safely replaces the previous local install.
+
+Set `WATCHIO_INSTALL_DIR` to choose a different destination, `WATCHIO_SKIP_OPEN=1` for unattended
+validation, or `WATCHIO_DEVELOPMENT_TEAM` to use an Apple Development team already configured in
+Xcode instead of local ad-hoc signing.
 
 ## Demo mode
 

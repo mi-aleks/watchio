@@ -26,6 +26,7 @@ jobs:
       - run: make test
       - run: make privacy-check
       - run: make docs-check
+      - run: make install-check
 
   xcode-16:
     name: Build / Xcode 16.2
@@ -56,6 +57,7 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - run: make release-build
+      - run: WATCHIO_INSTALL_DIR="$RUNNER_TEMP/WatchioInstall" WATCHIO_DERIVED_DATA="$GITHUB_WORKSPACE/.build/Xcode" WATCHIO_SKIP_OPEN=1 make install
 
   coverage:
     name: Core coverage

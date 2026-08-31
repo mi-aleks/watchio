@@ -10,6 +10,8 @@ All notable changes follow [Keep a Changelog](https://keepachangelog.com/en/1.1.
 
 ### Added
 
+- Added an agent-first README prompt and a checked-in, no-sudo `make install` flow for local Release
+  builds under `~/Applications`.
 - Added a process-only AI activity view and widget mode for Codex, Claude, Gemini CLI, Aider,
   OpenCode, Goose, GitHub Copilot CLI, and Cursor Agent.
 - Added host classification for CLI, VS Code, desktop, background, and separately executable
